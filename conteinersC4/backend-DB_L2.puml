@@ -1,0 +1,62 @@
+@startuml IDP_Platform_L2_Backend
+!include <C4/C4_Container>
+
+title IDP Platform — индивидуальная диаграмма контейнеров\nФокус: Backend API и Backend DB
+
+LAYOUT_LEFT_RIGHT()
+
+AddElementTag("focus", $bgColor="#1168BD", $fontColor="#FFFFFF", $borderColor="#0B4884", $legendText="Контейнеры участника")
+AddElementTag("supporting", $bgColor="#EEEEEE", $fontColor="#333333", $borderColor="#999999", $legendText="Связанные контейнеры")
+
+Person(employee, "Сотрудник", "Работает со своим ИПР, компетенциями, карьерными целями и обучением.")
+
+Person(manager, "Руководитель", "Сопровождает развитие сотрудников и оценивает их прогресс.")
+
+Person(hrAdmin, "HR-администратор", "Администрирует платформу и анализирует развитие сотрудников.")
+
+System_Ext(iam, "Корпоративный IAM / SSO", "Обеспечивает корпоративную идентификацию и единый вход.")
+
+System_Boundary(idpPlatform, "IDP Platform") {
+
+    Container(web, "Web Application", "React 18, TypeScript", "Предоставляет пользовательский интерфейс.", $tags="supporting")
+
+    Container(backend, "Backend API", "Go, Chi, pgx/v5, golang-jwt, validator, zerolog, Viper", "Реализует бизнес-логику пользователей, ИПР, задач, компетенций, профилей развития, карьерных траекторий, обучения, адаптации и кадрового резерва. Обеспечивает авторизацию и координирует сервисы.", $tags="focus")
+
+    ContainerDb(backendDatabase, "Backend DB", "PostgreSQL 16", "Хранит пользователей, роли, оргструктуру, ИПР, задачи, компетенции, профили навыков, карьерные роли и траектории, обучение, адаптацию, кадровый резерв и transactional outbox.", $tags="focus")
+
+    Container(reporting, "Reporting Service", "Go", "Формирует XLSX- и PDF-отчёты.", $tags="supporting")
+
+    Container(integration, "Integration Service", "Go", "Синхронизирует кадровые и учебные данные.", $tags="supporting")
+
+    Container(notificationService, "Notification Service", "Go", "Обрабатывает outbox и отправляет уведомления.", $tags="supporting")
+
+    ContainerDb(objectStorage, "Object Storage", "MinIO", "Хранит файлы, документы и отчёты.", $tags="supporting")
+}
+
+Rel(employee, web, "Управляет своим развитием", "HTTPS")
+
+Rel(manager, web, "Управляет развитием сотрудников", "HTTPS")
+
+Rel(hrAdmin, web, "Администрирует платформу", "HTTPS")
+
+Rel(web, backend, "Отправляет команды и получает данные", "HTTPS / REST / JSON")
+
+Rel(backend, iam, "Аутентифицирует пользователей", "OIDC / HTTPS")
+
+Rel(backend, backendDatabase, "Читает и изменяет данные; записывает outbox", "PostgreSQL / TCP 5432")
+
+Rel(backend, objectStorage, "Сохраняет и получает файлы", "S3-compatible API / HTTP")
+
+Rel(backend, reporting, "Запрашивает отчёты", "HTTPS / REST / JSON")
+
+Rel(reporting, backendDatabase, "Читает данные для отчётов", "PostgreSQL / TCP 5432")
+
+Rel(backend, integration, "Запускает синхронизацию и получает статус", "HTTPS / REST / JSON")
+
+Rel(integration, backend, "Передаёт нормализованные данные", "HTTPS / REST / JSON")
+
+Rel(notificationService, backendDatabase, "Читает outbox и данные для напоминаний", "PostgreSQL / TCP 5432")
+
+SHOW_LEGEND()
+
+@enduml

@@ -1,0 +1,50 @@
+@startuml IDP_Platform_L2_Notification_Redis
+!include <C4/C4_Container>
+
+title IDP Platform — индивидуальная диаграмма контейнеров\nФокус: Notification Service и Redis
+
+LAYOUT_LEFT_RIGHT()
+
+AddElementTag("focus", $bgColor="#1168BD", $fontColor="#FFFFFF", $borderColor="#0B4884", $legendText="Контейнеры участника")
+AddElementTag("supporting", $bgColor="#EEEEEE", $fontColor="#333333", $borderColor="#999999", $legendText="Связанные контейнеры")
+
+Person(employee, "Сотрудник", "Работает со своим ИПР, компетенциями, карьерными целями и обучением.")
+
+Person(manager, "Руководитель", "Сопровождает развитие сотрудников и оценивает их прогресс.")
+
+Person(hrAdmin, "HR-администратор", "Администрирует платформу и анализирует развитие сотрудников.")
+
+System_Ext(smtp, "Корпоративный SMTP-сервис", "Обеспечивает доставку email-уведомлений.")
+
+System_Boundary(idpPlatform, "IDP Platform") {
+
+    Container(web, "Web Application", "React 18, TypeScript", "Предоставляет пользовательский интерфейс.", $tags="supporting")
+
+    Container(backend, "Backend API", "Go", "Обрабатывает запросы и создаёт задания уведомлений.", $tags="supporting")
+
+    ContainerDb(backendDatabase, "Backend DB", "PostgreSQL 16", "Хранит бизнес-данные и transactional outbox.", $tags="supporting")
+
+    Container(notificationService, "Notification Service", "Go, Redis client, go-mail", "Relay переносит задания из transactional outbox в Redis. Worker обрабатывает очередь и отправляет email. Сервис формирует напоминания и обеспечивает повторные попытки отправки.", $tags="focus")
+
+    Container(redis, "Redis", "Redis 7", "Хранит очередь email-уведомлений, задания в обработке и задания, перенесённые в dead-letter queue после неудачных попыток.", $tags="focus")
+}
+
+Rel(employee, web, "Управляет своим развитием", "HTTPS")
+
+Rel(manager, web, "Управляет развитием сотрудников", "HTTPS")
+
+Rel(hrAdmin, web, "Администрирует платформу", "HTTPS")
+
+Rel(web, backend, "Отправляет команды и получает данные", "HTTPS / REST / JSON")
+
+Rel(backend, backendDatabase, "Изменяет данные и записывает outbox", "PostgreSQL / TCP 5432")
+
+Rel(notificationService, backendDatabase, "Читает outbox и данные для напоминаний", "PostgreSQL / TCP 5432")
+
+Rel(notificationService, redis, "Публикует и получает задания; retry и dead-letter", "RESP / TCP 6379")
+
+Rel(notificationService, smtp, "Отправляет email-уведомления", "SMTP / TLS 587")
+
+SHOW_LEGEND()
+
+@enduml

@@ -1,0 +1,64 @@
+@startuml IDP_Platform_L2_Reporting_Integration
+!include <C4/C4_Container>
+
+title IDP Platform — индивидуальная диаграмма контейнеров\nФокус: Reporting Service и Integration Service
+
+LAYOUT_LEFT_RIGHT()
+
+AddElementTag("focus", $bgColor="#1168BD", $fontColor="#FFFFFF", $borderColor="#0B4884", $legendText="Контейнеры участника")
+AddElementTag("supporting", $bgColor="#EEEEEE", $fontColor="#333333", $borderColor="#999999", $legendText="Связанные контейнеры")
+
+Person(employee, "Сотрудник", "Работает со своим ИПР, компетенциями, карьерными целями и обучением.")
+
+Person(manager, "Руководитель", "Сопровождает развитие сотрудников и оценивает их прогресс.")
+
+Person(hrAdmin, "HR-администратор", "Администрирует платформу и анализирует развитие сотрудников.")
+
+System_Ext(hris, "HRIS / Кадровая система", "Источник кадровых и организационных данных.")
+
+System_Ext(lms, "LMS / Обучающая платформа", "Источник курсов и результатов обучения.")
+
+System_Boundary(idpPlatform, "IDP Platform") {
+
+    Container(web, "Web Application", "React 18, TypeScript", "Предоставляет пользовательский интерфейс.", $tags="supporting")
+
+    Container(backend, "Backend API", "Go", "Обрабатывает запросы и координирует сервисы.", $tags="supporting")
+
+    Container(reporting, "Reporting Service", "Go, Excelize, go-pdf/fpdf", "Формирует аналитические отчёты в форматах XLSX и PDF на основе данных основной БД. Сохраняет сформированные отчёты в объектном хранилище.", $tags="focus")
+
+    Container(integration, "Integration Service", "Go, HTTP client, REST/JSON", "Синхронизирует кадровые и учебные данные с HRIS и LMS. Преобразует внешние данные во внутреннюю модель платформы и передаёт их в Backend API.", $tags="focus")
+
+    ContainerDb(backendDatabase, "Backend DB", "PostgreSQL 16", "Хранит бизнес-данные платформы.", $tags="supporting")
+
+    ContainerDb(objectStorage, "Object Storage", "MinIO", "Хранит файлы, документы и отчёты.", $tags="supporting")
+}
+
+Rel(employee, web, "Управляет своим развитием", "HTTPS")
+
+Rel(manager, web, "Управляет развитием сотрудников", "HTTPS")
+
+Rel(hrAdmin, web, "Администрирует платформу", "HTTPS")
+
+Rel(web, backend, "Отправляет команды и получает данные", "HTTPS / REST / JSON")
+
+Rel(backend, reporting, "Запрашивает отчёты", "HTTPS / REST / JSON")
+
+Rel(reporting, backendDatabase, "Читает данные для отчётов", "PostgreSQL / TCP 5432")
+
+Rel(reporting, objectStorage, "Сохраняет отчёты", "S3-compatible API / HTTP")
+
+Rel(backend, integration, "Запускает синхронизацию и получает статус", "HTTPS / REST / JSON")
+
+Rel(integration, backend, "Передаёт нормализованные данные", "HTTPS / REST / JSON")
+
+Rel(integration, hris, "Запрашивает кадровые данные", "HTTPS / REST / JSON")
+
+Rel(hris, integration, "Передаёт кадровые данные", "HTTPS / REST / JSON")
+
+Rel(integration, lms, "Запрашивает данные об обучении", "HTTPS / REST / JSON")
+
+Rel(lms, integration, "Передаёт курсы и результаты обучения", "HTTPS / REST / JSON")
+
+SHOW_LEGEND()
+
+@enduml

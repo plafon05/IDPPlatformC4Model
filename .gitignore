@@ -1,0 +1,19 @@
+# Файлы macOS и Windows
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Временные файлы редакторов
+*.tmp
+*.swp
+*.swo
+*~
+
+# Настройки IDE
+.idea/
+.vscode/
+
+# Каталоги для сгенерированных диаграмм
+out/
+build/
+exports/

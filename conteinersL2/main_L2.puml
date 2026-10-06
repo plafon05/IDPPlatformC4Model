@@ -1,0 +1,92 @@
+@startuml IDP_Platform_L2
+!include <C4/C4_Container>
+
+title IDP Platform - Container Diagram
+
+LAYOUT_LEFT_RIGHT()
+
+Person(employee, "Сотрудник", "Работает со своим развитием, ИПР, компетенциями, карьерными целями и обучением.")
+
+Person(manager, "Руководитель", "Управляет развитием сотрудников, сопровождает ИПР и оценивает их прогресс.")
+
+Person(hrAdmin, "HR-администратор", "Управляет пользователями, карьерными моделями, адаптацией, кадровым резервом и аналитикой.")
+
+
+System_Ext(iam, "Корпоративный IAM / SSO", "Внешний Identity Provider для единого корпоративного входа.")
+
+System_Ext(hris, "HRIS / Кадровая система", "Источник сотрудников, подразделений, должностей и организационных связей.")
+
+System_Ext(lms, "LMS / Обучающая платформа", "Источник курсов, программ обучения, прогресса и результатов обучения.")
+
+System_Ext(smtp, "Корпоративный SMTP-сервис", "Корпоративная почтовая инфраструктура для доставки email-уведомлений.")
+
+
+System_Boundary(idpPlatform, "IDP Platform - корпоративная платформа управления развитием сотрудников") {
+
+    Container(web, "Web Application", "React 18, TypeScript, Vite, Zustand, TanStack Query, React Router, Tailwind CSS, shadcn/ui", "Предоставляет интерфейс для работы с ИПР, задачами, компетенциями, Talent Profile, карьерными траекториями, обучением, onboarding, кадровым резервом и аналитикой.")
+
+    Container(backend, "Backend API", "Go, Chi, pgx/v5, golang-jwt, validator, zerolog, Viper", "Реализует основную бизнес-логику: пользователи, ИПР, задачи, компетенции, Career Tracks, Skill Gap Analysis, Talent Profile, рекомендации по развитию, onboarding, кадровый резерв, авторизация и координация сервисов.")
+
+    Container(reporting, "Reporting Service", "Go, Excelize, go-pdf/fpdf", "Формирует аналитические отчёты в форматах XLSX и PDF на основе данных основной БД.")
+
+    Container(integration, "Integration Service", "Go, HTTP client, REST/JSON", "Синхронизирует IDP Platform с HRIS, LMS и другими корпоративными системами и преобразует внешние данные во внутреннюю модель платформы.")
+
+    Container(notificationService, "Notification Service", "Go, Redis client, go-mail", "Обрабатывает transactional outbox, очередь уведомлений, напоминания, повторные попытки и отправку email.")
+
+    ContainerDb(backendDatabase, "Backend DB", "PostgreSQL 16", "Хранит пользователей, роли, оргструктуру, ИПР, задачи, компетенции, профили навыков, карьерные роли и траектории, обучение, onboarding, кадровый резерв и transactional outbox.")
+
+    Container(redis, "Redis", "Redis 7", "Очередь обработки email-уведомлений, processing queue и dead-letter queue.")
+
+    ContainerDb(objectStorage, "Object Storage", "MinIO", "Хранит аватары, пользовательские файлы, документы и сформированные XLSX/PDF-отчёты.")
+}
+
+
+Rel(employee, web, "Управляет своим развитием", "HTTPS")
+
+Rel(manager, web, "Управляет развитием сотрудников", "HTTPS")
+
+Rel(hrAdmin, web, "Администрирует платформу и аналитику", "HTTPS")
+
+
+Rel(web, backend, "Передаёт команды и получает данные", "HTTPS / REST / JSON")
+
+
+Rel(backend, iam, "Аутентифицирует пользователей", "OIDC / HTTPS")
+
+
+Rel(backend, backendDatabase, "Читает и изменяет бизнес-данные", "PostgreSQL / TCP 5432")
+
+
+Rel(backend, objectStorage, "Сохраняет и получает файлы", "S3-compatible API / HTTP")
+
+
+Rel(backend, reporting, "Запрашивает формирование отчётов", "HTTPS / REST / JSON")
+
+Rel(reporting, backendDatabase, "Читает данные для отчётов", "PostgreSQL / TCP 5432")
+
+Rel(reporting, objectStorage, "Сохраняет отчёты", "S3-compatible API / HTTP")
+
+
+Rel(backend, integration, "Запускает синхронизацию", "HTTPS / REST / JSON")
+
+Rel(integration, hris, "Запрашивает кадровые данные", "HTTPS / REST / JSON")
+
+Rel(hris, integration, "Передаёт кадровые данные", "HTTPS / REST / JSON")
+
+Rel(integration, lms, "Запрашивает данные об обучении", "HTTPS / REST / JSON")
+
+Rel(lms, integration, "Передаёт данные об обучении", "HTTPS / REST / JSON")
+
+Rel(integration, backend, "Передаёт результаты синхронизации", "HTTPS / REST / JSON")
+
+
+Rel(notificationService, backendDatabase, "Читает outbox и данные напоминаний", "PostgreSQL / TCP 5432")
+
+Rel(notificationService, redis, "Обрабатывает очередь уведомлений", "RESP / TCP 6379")
+
+Rel(notificationService, smtp, "Отправляет email", "SMTP / TLS 587")
+
+
+SHOW_LEGEND()
+
+@enduml

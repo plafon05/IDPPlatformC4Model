@@ -1,0 +1,44 @@
+@startuml IDP_Platform_L2_Web_ObjectStorage
+!include <C4/C4_Container>
+
+title IDP Platform — индивидуальная диаграмма контейнеров\nФокус: Web Application и Object Storage
+
+LAYOUT_LEFT_RIGHT()
+
+AddElementTag("focus", $bgColor="#1168BD", $fontColor="#FFFFFF", $borderColor="#0B4884", $legendText="Контейнеры участника")
+AddElementTag("supporting", $bgColor="#EEEEEE", $fontColor="#333333", $borderColor="#999999", $legendText="Связанные контейнеры")
+
+Person(employee, "Сотрудник", "Работает со своим ИПР, компетенциями, карьерными целями и обучением.")
+
+Person(manager, "Руководитель", "Сопровождает развитие сотрудников и оценивает их прогресс.")
+
+Person(hrAdmin, "HR-администратор", "Администрирует платформу и анализирует развитие сотрудников.")
+
+System_Boundary(idpPlatform, "IDP Platform") {
+
+    Container(web, "Web Application", "React 18, TypeScript, Vite, Zustand, TanStack Query, React Router, Tailwind CSS, shadcn/ui", "Предоставляет интерфейс для работы с ИПР, задачами, компетенциями, профилем развития, карьерными траекториями, обучением, адаптацией, кадровым резервом и аналитикой.", $tags="focus")
+
+    Container(backend, "Backend API", "Go", "Реализует бизнес-логику и обрабатывает запросы интерфейса.", $tags="supporting")
+
+    Container(reporting, "Reporting Service", "Go", "Формирует XLSX- и PDF-отчёты.", $tags="supporting")
+
+    ContainerDb(objectStorage, "Object Storage", "MinIO", "Хранит аватары, пользовательские файлы, документы и сформированные XLSX/PDF-отчёты.", $tags="focus")
+}
+
+Rel(employee, web, "Управляет своим развитием", "HTTPS")
+
+Rel(manager, web, "Управляет развитием сотрудников", "HTTPS")
+
+Rel(hrAdmin, web, "Администрирует платформу", "HTTPS")
+
+Rel(web, backend, "Отправляет команды и получает данные", "HTTPS / REST / JSON")
+
+Rel(backend, objectStorage, "Сохраняет и получает файлы", "S3-compatible API / HTTP")
+
+Rel(backend, reporting, "Запрашивает отчёты", "HTTPS / REST / JSON")
+
+Rel(reporting, objectStorage, "Сохраняет отчёты", "S3-compatible API / HTTP")
+
+SHOW_LEGEND()
+
+@enduml

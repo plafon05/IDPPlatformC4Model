@@ -1,0 +1,98 @@
+@startuml IDP_Platform_Notification_Service_L3
+
+'!ENABLE_ALL_PLANT_ELEMENTS = 1
+!include <C4/C4_Component>
+
+title IDP Platform — диаграмма компонентов Notification Service
+
+LAYOUT_TOP_DOWN()
+
+System_Boundary(idpPlatform, "IDP Platform") {
+
+    Container(gateway, "API Gateway", "Go", "Маршрутизирует REST-запросы и проксирует SSE.")
+
+    ContainerQueue(eventStreams, "Брокер событий", "Apache Kafka", "Передаёт события платформы, инициирующие создание уведомлений.")
+
+    ContainerDb(notificationDb, "Notification DB", "PostgreSQL", "Хранит уведомления, настройки, шаблоны, задания доставки и статусы обработки.")
+
+    Container_Boundary(notificationService, "Notification Service") {
+
+        Component(restHandler, "REST API Handler", "Go / HTTP", "Обрабатывает историю уведомлений, статусы прочтения, настройки и команды управления доставкой.")
+
+        Component(eventConsumer, "Kafka Event Consumer", "Go / Kafka Client", "Получает события платформы, требующие создания уведомлений.")
+
+        Component(sseHandler, "SSE Handler", "Go / SSE", "Поддерживает поток новых in-app уведомлений для подключённых пользователей.")
+
+        Component(workerPool, "Delivery Worker Pool", "Go / Async Workers", "Запускает асинхронную обработку заданий доставки.")
+
+
+        Component(notificationServiceApp, "Notification Application Service", "Go / Application Service", "Управляет созданием, чтением и состоянием уведомлений.")
+
+        Component(deliveryService, "Delivery Service", "Go / Application Service", "Оркестрирует выполнение и повторные попытки доставки уведомлений.")
+
+        Component(templateEngine, "Template Engine", "Go / text/template", "Формирует содержимое уведомления из шаблона и payload события.")
+
+
+        Component(notificationRepo, "Notification Repository", "Go / SQL", "Читает и сохраняет уведомления, статусы прочтения и доставки.")
+
+        Component(settingsRepo, "Settings Repository", "Go / SQL", "Работает с пользовательскими настройками каналов уведомлений.")
+
+        Component(templateRepo, "Template Repository", "Go / SQL", "Загружает шаблоны уведомлений.")
+
+        Component(jobRepo, "Delivery Job Repository", "Go / SQL", "Создаёт, выбирает и изменяет задания асинхронной доставки.")
+
+
+        Component(smtpAdapter, "SMTP Adapter", "Go / SMTP Client", "Изолирует прикладную логику от протокола SMTP.")
+    }
+}
+
+System_Ext(smtp, "Корпоративный SMTP-сервис", "Обеспечивает доставку email пользователям.")
+
+Rel(gateway, restHandler, "Передаёт запросы истории, статусов, настроек и управления доставкой", "HTTPS / REST / JSON")
+
+Rel(gateway, sseHandler, "Открывает поток in-app уведомлений пользователя", "HTTPS / SSE")
+
+Rel(eventStreams, eventConsumer, "Передаёт события платформы для формирования уведомлений", "Kafka protocol / TLS")
+
+Rel(restHandler, notificationServiceApp, "Запускает сценарии работы с уведомлениями и настройками", "In-process / Go call")
+
+Rel(restHandler, deliveryService, "Передаёт команды управления доставкой", "In-process / Go call")
+
+Rel(eventConsumer, notificationServiceApp, "Передаёт событие для создания уведомления", "In-process / Go call")
+
+Rel(workerPool, deliveryService, "Запускает обработку задания доставки", "In-process / Go call")
+
+Rel(notificationServiceApp, notificationRepo, "Сохраняет уведомления и получает их историю", "In-process / Go call")
+
+Rel(notificationServiceApp, settingsRepo, "Получает настройки каналов доставки пользователя", "In-process / Go call")
+
+Rel(notificationServiceApp, templateEngine, "Запрашивает формирование содержимого уведомления", "In-process / Go call")
+
+Rel(notificationServiceApp, jobRepo, "Создаёт задание асинхронной доставки", "In-process / Go call")
+
+Rel(notificationServiceApp, smtpAdapter, "Передаёт подготовленное email-сообщение на отправку", "In-process / Go call")
+
+Rel(notificationServiceApp, sseHandler, "Передаёт новое in-app уведомление активному подключению", "In-process / Go channel")
+
+Rel(deliveryService, smtpAdapter, "Передаёт email-сообщение для доставки", "In-process / Go call")
+
+Rel(deliveryService, notificationRepo, "Обновляет статус доставки уведомления", "In-process / Go call")
+
+Rel(deliveryService, jobRepo, "Фиксирует выполнение или планирует повторную попытку", "In-process / Go call")
+
+Rel(templateEngine, templateRepo, "Получает шаблон требуемого типа уведомления", "In-process / Go call")
+
+Rel(smtpAdapter, smtp, "Передаёт email корпоративному SMTP-сервису", "SMTP / TLS")
+
+Rel(notificationRepo, notificationDb, "Читает и сохраняет уведомления и их состояния", "PostgreSQL / TCP 5432 / TLS")
+
+Rel(settingsRepo, notificationDb, "Читает и сохраняет настройки уведомлений", "PostgreSQL / TCP 5432 / TLS")
+
+Rel(templateRepo, notificationDb, "Читает шаблоны уведомлений", "PostgreSQL / TCP 5432 / TLS")
+
+Rel(jobRepo, notificationDb, "Создаёт, выбирает и изменяет задания доставки", "PostgreSQL / TCP 5432 / TLS")
+
+
+SHOW_LEGEND()
+
+@enduml

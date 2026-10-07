@@ -1,0 +1,86 @@
+@startuml IDP_Platform_L2
+!include <C4/C4_Container>
+
+title IDP Platform — диаграмма контейнеров
+LAYOUT_LEFT_RIGHT()
+
+Person(employee, "Сотрудник", "Работает с ИПР, задачами, компетенциями и карьерными целями.")
+Person(manager, "Руководитель", "Согласовывает ИПР, оценивает сотрудников и развитие команды.")
+Person(hrAdmin, "HR-администратор", "Управляет справочниками, карьерными моделями и кадровым резервом.")
+
+System_Ext(iam, "Корпоративный IAM / SSO", "Обеспечивает единый вход и выдаёт токены доступа.")
+System_Ext(hris, "HRIS / Кадровая система", "Предоставляет сведения о сотрудниках и оргструктуре.")
+System_Ext(lms, "LMS / Обучающая платформа", "Предоставляет курсы, прогресс и результаты обучения.")
+System_Ext(smtp, "Корпоративный SMTP-сервис", "Обеспечивает доставку email.")
+
+System_Boundary(idpPlatform, "IDP Platform — платформа развития сотрудников") {
+    Container(web, "Web Application", "React, TypeScript", "Интерфейс ИПР, адаптации, компетенций, карьеры, обучения, аналитики и уведомлений.")
+    Container(gateway, "API Gateway", "Reverse proxy, JWT validation", "Маршрутизирует запросы, проверяет токены, ограничивает частоту обращений и проксирует SSE.")
+    Container(employeeService, "Employee Service", "Go, HTTP API, pgx", "Управляет сотрудниками, оргструктурой и ролями. Сопоставляет учётные записи IAM и синхронизирует данные HRIS.")
+    Container(developmentService, "Development Plan Service", "Go, HTTP API, pgx", "Управляет ИПР, задачами, оценками выполнения, комментариями и адаптацией. Контролирует сроки и формирует напоминания.")
+    Container(talentService, "Talent Service", "Go, HTTP API, pgx", "Управляет компетенциями, карьерой и кадровым резервом. Формирует Talent Profile, Skill Gap и рекомендации, синхронизирует обучение с LMS.")
+    Container(analyticsService, "Analytics & Reporting Service", "Go, Excelize, go-pdf/fpdf", "Обновляет аналитическую модель по событиям, рассчитывает показатели и формирует XLSX/PDF с учётом прав доступа.")
+    Container(notificationService, "Notification Service", "Go, Redis client, SMTP client, SSE", "Доставляет email и in-app уведомления. Управляет настройками, историей, прочтением, SSE и повторными попытками.")
+
+    ContainerDb(employeeDb, "Employee DB", "PostgreSQL", "Сотрудники, оргструктура, роли, идентификаторы IAM/HRIS, состояние синхронизации и outbox.")
+    ContainerDb(developmentDb, "Development Plan DB", "PostgreSQL", "ИПР, задачи, оценки, комментарии, шаблоны адаптации, напоминания, локальные проекции и outbox.")
+    ContainerDb(talentDb, "Talent DB", "PostgreSQL", "Компетенции, карьерные модели, обучение, кадровый резерв, проекции профиля, состояние синхронизации и outbox.")
+    ContainerDb(analyticsDb, "Analytics DB", "PostgreSQL", "Аналитические проекции, состояние обработки событий, задания и метаданные отчётов.")
+    ContainerDb(notificationDb, "Notification DB", "PostgreSQL", "Уведомления, отметки прочтения, настройки каналов, сведения получателей и состояние доставки.")
+
+    ContainerDb(eventStreams, "Redis", "Redis Streams", "Потоки событий и заданий с независимыми группами потребителей и подтверждением обработки.")
+    ContainerDb(objectStorage, "Object Storage", "MinIO / S3 API", "Аватары, вложения и отчёты. Доступ сервисов разграничен по buckets.")
+}
+
+' Пользовательский интерфейс
+Rel(employee, web, "Работает со своим развитием", "HTTPS")
+Rel(manager, web, "Управляет развитием команды", "HTTPS")
+Rel(hrAdmin, web, "Администрирует платформу", "HTTPS")
+
+' Корпоративный вход
+Rel(web, iam, "Выполняет вход и получает токены", "OIDC / PKCE / HTTPS")
+Rel(gateway, iam, "Получает настройки и ключи проверки токенов", "OIDC Discovery / JWKS / HTTPS")
+
+' Входная точка и маршрутизация
+Rel(web, gateway, "Вызывает API и получает уведомления", "HTTPS / REST / SSE")
+Rel(gateway, employeeService, "Направляет запросы сотрудников и оргструктуры", "HTTPS / REST / JSON")
+Rel(gateway, developmentService, "Направляет запросы ИПР и адаптации", "HTTPS / REST / JSON")
+Rel(gateway, talentService, "Направляет запросы компетенций и карьеры", "HTTPS / REST / JSON")
+Rel(gateway, analyticsService, "Направляет запросы аналитики и отчётов", "HTTPS / REST / JSON")
+Rel(gateway, notificationService, "Направляет запросы уведомлений и SSE", "HTTPS / REST / SSE")
+
+' Приватные хранилища
+Rel(employeeService, employeeDb, "Хранит кадровые данные и outbox", "PostgreSQL")
+Rel(developmentService, developmentDb, "Хранит планы, задачи и outbox", "PostgreSQL")
+Rel(talentService, talentDb, "Хранит данные развития и outbox", "PostgreSQL")
+Rel(analyticsService, analyticsDb, "Обновляет аналитику и задания отчётности", "PostgreSQL")
+Rel(notificationService, notificationDb, "Хранит уведомления и статусы доставки", "PostgreSQL")
+
+' Проверка актуальных полномочий
+Rel(developmentService, employeeService, "Проверяет роли и подчинённость", "HTTPS / REST / JSON")
+Rel(talentService, employeeService, "Проверяет права оценивания и работы с резервом", "HTTPS / REST / JSON")
+Rel(analyticsService, employeeService, "Уточняет доступных сотрудников и подразделения", "HTTPS / REST / JSON")
+
+' Внешние интеграции
+Rel(employeeService, hris, "Синхронизирует сотрудников и оргструктуру", "HTTPS / REST / JSON")
+Rel(talentService, lms, "Получает курсы и результаты обучения", "HTTPS / REST / JSON")
+Rel(notificationService, smtp, "Отправляет email", "SMTP / TLS")
+
+' Публикация через outbox relay внутри сервисов
+Rel(employeeService, eventStreams, "Публикует кадровые события через outbox", "RESP / XADD")
+Rel(developmentService, eventStreams, "Публикует события ИПР и напоминания через outbox", "RESP / XADD")
+Rel(talentService, eventStreams, "Публикует события развития через outbox", "RESP / XADD")
+
+' Независимое потребление событий
+Rel(developmentService, eventStreams, "Получает изменения сотрудников и компетенций", "RESP / XREADGROUP / XACK")
+Rel(talentService, eventStreams, "Получает кадровые изменения и результаты ИПР", "RESP / XREADGROUP / XACK")
+Rel(analyticsService, eventStreams, "Получает события для обновления аналитики", "RESP / XREADGROUP / XACK")
+Rel(notificationService, eventStreams, "Получает события, задания и данные получателей", "RESP / XREADGROUP / XACK")
+
+' Файлы в отдельных buckets
+Rel(employeeService, objectStorage, "Сохраняет и получает аватары", "S3 API / HTTPS")
+Rel(developmentService, objectStorage, "Сохраняет и получает вложения", "S3 API / HTTPS")
+Rel(analyticsService, objectStorage, "Сохраняет и получает отчёты", "S3 API / HTTPS")
+
+SHOW_LEGEND()
+@enduml

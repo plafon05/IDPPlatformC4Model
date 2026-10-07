@@ -1,0 +1,86 @@
+@startuml IDP_Platform_EmployeeService_L3_v6_boundary
+!ENABLE_ALL_PLANT_ELEMENTS = 1
+!include <C4/C4_Component>
+
+title IDP Platform — Employee Service — диаграмма компонентов (L3)
+
+LAYOUT_TOP_DOWN()
+
+System_Ext(hris, "HRIS / Кадровая система", "Предоставляет сведения о сотрудниках и организационной структуре.")
+
+System_Boundary(idpPlatform, "IDP Platform") {
+
+    Container(gateway, "API Gateway", "Go", "Маршрутизирует запросы, проверяет токены и ограничивает частоту запросов.")
+    ContainerDb(employeeDb, "Employee DB", "PostgreSQL", "Хранит сотрудников, оргструктуру, роли, состояние синхронизации и outbox.")
+    ContainerQueue(eventStreams, "Брокер событий", "Apache Kafka", "Хранит и передаёт кадровые события между сервисами.")
+    ContainerDb(objectStorage, "Object Storage", "MinIO", "Хранит аватары сотрудников.")
+
+    Container_Boundary(employeeService, "Employee Service") {
+
+    together {
+        Component(employeeApi, "Employee API Controller", "Go / HTTP Handler", "Принимает REST-запросы и передаёт их прикладным сервисам.")
+        Component(hrisWorker, "HRIS Polling Worker", "Go Background Worker", "По расписанию запускает цикл импорта данных из HRIS.")
+        Component(outboxWorker, "Outbox Publishing Worker", "Go Background Worker", "По расписанию запускает цикл публикации событий outbox.")
+    }
+
+    together {
+        Component(employeeAppService, "Employee Management Service", "Go Application Service", "Реализует операции чтения и изменения данных сотрудников и координирует работу с аватарами.")
+        Component(organizationAppService, "Organization Structure Service", "Go Application Service", "Реализует операции с подразделениями, оргструктурой и организационными связями.")
+        Component(roleAppService, "Role Management Service", "Go Application Service", "Реализует операции чтения и применения изменений ролей сотрудников.")
+        Component(hrisImportService, "HRIS Import Service", "Go Application Service", "Выполняет цикл импорта: получает изменения из HRIS и передаёт их профильным прикладным сервисам.")
+        Component(outboxPublishService, "Outbox Publication Service", "Go Application Service", "Выполняет цикл публикации: получает pending-события, публикует их и фиксирует результат.")
+    }
+
+    together {
+        Component(employeeRepo, "Employee Repository", "Go / pgx", "Читает и сохраняет данные сотрудников.")
+        Component(organizationRepo, "Organization Repository", "Go / pgx", "Читает и сохраняет оргструктуру.")
+        Component(roleRepo, "Role Repository", "Go / pgx", "Читает и сохраняет роли сотрудников.")
+        Component(syncStateRepo, "Sync State Repository", "Go / pgx", "Хранит контрольную точку и состояние импорта HRIS.")
+        Component(outboxRepo, "Outbox Repository", "Go / pgx", "Добавляет события в outbox, выдаёт pending-события и отмечает опубликованные.")
+        Component(hrisClient, "HRIS Client", "Go / HTTP Client", "Выполняет REST-запросы к HRIS и преобразует полученные кадровые данные.")
+        Component(kafkaProducer, "Kafka Producer", "Go / Kafka Client", "Публикует кадровые события в Apache Kafka.")
+        Component(avatarStorage, "Avatar Storage Adapter", "Go / S3 Client", "Сохраняет, получает и удаляет аватары в MinIO.")
+    }
+}
+}
+
+Rel(gateway, employeeApi, "Передаёт запросы по сотрудникам и оргструктуре", "HTTPS / REST / JSON")
+
+Rel(employeeApi, employeeAppService, "Операции с сотрудниками", "Go Call")
+Rel(employeeApi, organizationAppService, "Операции с оргструктурой", "Go Call")
+Rel(employeeApi, roleAppService, "Операции с ролями", "Go Call")
+
+Rel(hrisWorker, hrisImportService, "Запускает цикл импорта", "Go Call")
+Rel(outboxWorker, outboxPublishService, "Запускает цикл публикации", "Go Call")
+
+Rel(hrisImportService, syncStateRepo, "Читает и обновляет checkpoint", "Go Call")
+Rel(hrisImportService, hrisClient, "Получает кадровые изменения", "Go Call")
+Rel(hrisImportService, employeeAppService, "Передаёт изменения сотрудников", "Go Call")
+Rel(hrisImportService, organizationAppService, "Передаёт изменения оргструктуры", "Go Call")
+Rel(hrisImportService, roleAppService, "Передаёт изменения ролей", "Go Call")
+
+Rel(employeeAppService, employeeRepo, "Читает и сохраняет сотрудников", "Go Call")
+Rel(employeeAppService, outboxRepo, "Записывает кадровые события", "Go Call")
+Rel(employeeAppService, avatarStorage, "Работает с аватарами", "Go Call")
+
+Rel(organizationAppService, organizationRepo, "Читает и сохраняет оргструктуру", "Go Call")
+Rel(organizationAppService, outboxRepo, "Записывает события оргструктуры", "Go Call")
+
+Rel(roleAppService, roleRepo, "Читает и сохраняет роли", "Go Call")
+Rel(roleAppService, outboxRepo, "Записывает события ролей", "Go Call")
+
+Rel(outboxPublishService, outboxRepo, "Читает pending и фиксирует результат", "Go Call")
+Rel(outboxPublishService, kafkaProducer, "Передаёт событие на публикацию", "Go Call")
+
+Rel(hrisClient, hris, "Получает сотрудников и оргструктуру", "HTTPS / REST / JSON")
+Rel(avatarStorage, objectStorage, "Работает с файлами аватаров", "S3 API / HTTPS")
+Rel(kafkaProducer, eventStreams, "Публикует кадровые события", "Kafka protocol / TLS")
+
+Rel(employeeRepo, employeeDb, "Читает и сохраняет сотрудников", "PostgreSQL / TLS")
+Rel(organizationRepo, employeeDb, "Читает и сохраняет оргструктуру", "PostgreSQL / TLS")
+Rel(roleRepo, employeeDb, "Читает и сохраняет роли", "PostgreSQL / TLS")
+Rel(syncStateRepo, employeeDb, "Читает и сохраняет состояние импорта", "PostgreSQL / TLS")
+Rel(outboxRepo, employeeDb, "Читает и изменяет outbox", "PostgreSQL / TLS")
+
+SHOW_LEGEND()
+@enduml

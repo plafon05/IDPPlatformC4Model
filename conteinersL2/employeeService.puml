@@ -1,0 +1,55 @@
+@startuml IDP_Platform_L2_Employee
+!ENABLE_ALL_PLANT_ELEMENTS = 1
+!include <C4/C4_Container>
+
+title IDP Platform — индивидуальная диаграмма контейнеров\nФокус: Employee Service
+
+LAYOUT_TOP_DOWN()
+
+AddElementTag("focus", $bgColor="#1168BD", $fontColor="#FFFFFF", $borderColor="#0B4884", $legendText="Контейнеры участника")
+AddElementTag("belonging-but-not-considered", $bgColor="#1167bd85", $fontColor="#FFFFFF", $borderColor="#0B4884", $legendText="Контейнеры платформы вне фокуса")
+AddElementTag("supporting", $bgColor="#EEEEEE", $fontColor="#333333", $borderColor="#999999", $legendText="Связанные контейнеры")
+
+' Пользователи
+together {
+    Person(employee, "Сотрудник", "Работает со своим развитием и профилем.")
+    Person(manager, "Руководитель", "Управляет развитием команды.")
+    Person(hrAdmin, "HR-администратор", "Управляет сотрудниками, оргструктурой и ролями.")
+}
+
+' Внешняя система
+System_Ext(hris, "HRIS / Кадровая система", "Предоставляет сведения о сотрудниках и оргструктуре.")
+
+' Контейнеры платформы
+System_Boundary(idpPlatform, "IDP Platform") {
+
+    Container(web, "Web Application", "React, TypeScript", "Предоставляет пользовательский интерфейс.", $tags="supporting")
+
+    Container(gateway, "API Gateway", "Go", "Проверяет токены и маршрутизирует запросы.", $tags="supporting", $baseShape="hexagon")
+
+    Container(employeeService, "Employee Service", "Go", "Управляет сотрудниками, подразделениями, должностями, организационными связями и ролями. Синхронизирует кадровые данные с HRIS и работает с аватарами.", $tags="focus")
+
+    ContainerDb(employeeDb, "Employee DB", "PostgreSQL", "Хранит сотрудников, оргструктуру, роли, данные синхронизации и outbox кадровых событий.", $tags="belonging-but-not-considered")
+
+    ContainerQueue(eventStreams, "Брокер событий", "Apache Kafka", "Передаёт события между сервисами.", $tags="supporting")
+
+    ContainerDb(objectStorage, "Object Storage", "MinIO", "Хранит аватары, вложения и отчёты.", $tags="belonging-but-not-considered")
+}
+
+' Пользовательский доступ
+Rel(employee, web, "Работает со своим развитием", "HTTPS")
+Rel(manager, web, "Управляет развитием команды", "HTTPS")
+Rel(hrAdmin, web, "Администрирует платформу", "HTTPS")
+
+Rel(web, gateway, "Вызывает API", "HTTPS / REST")
+Rel(gateway, employeeService, "Запросы сотрудников и оргструктуры", "HTTPS / REST / JSON")
+
+' Окружение Employee Service
+Rel(employeeService, employeeDb, "Читает и изменяет данные и outbox", "PostgreSQL / TLS")
+Rel(employeeService, hris, "Синхронизирует кадровые данные", "HTTPS / REST / JSON")
+Rel(employeeService, eventStreams, "Публикует кадровые события", "Kafka protocol / TLS")
+Rel(employeeService, objectStorage, "Работает с аватарами", "S3 API / HTTPS")
+
+SHOW_LEGEND()
+
+@enduml

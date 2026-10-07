@@ -1,0 +1,51 @@
+@startuml IDP_Platform_L2_Development
+!ENABLE_ALL_PLANT_ELEMENTS = 1
+!include <C4/C4_Container>
+
+title IDP Platform — индивидуальная диаграмма контейнеров\nФокус: Development Plan Service
+
+LAYOUT_TOP_DOWN()
+
+AddElementTag("focus", $bgColor="#1168BD", $fontColor="#FFFFFF", $borderColor="#0B4884", $legendText="Контейнеры участника")
+AddElementTag("belonging-but-not-considered", $bgColor="#1167bd85", $fontColor="#FFFFFF", $borderColor="#0B4884", $legendText="Контейнеры участника без дальнейшей детализации")
+AddElementTag("supporting", $bgColor="#EEEEEE", $fontColor="#333333", $borderColor="#999999", $legendText="Связанные контейнеры")
+
+' Пользователи
+together {
+    Person(employee, "Сотрудник", "Работает со своим ИПР, задачами и адаптацией.")
+    Person(manager, "Руководитель", "Согласовывает ИПР и оценивает выполнение задач.")
+    Person(hrAdmin, "HR-администратор", "Управляет шаблонами ИПР и адаптации.")
+}
+
+' Контейнеры платформы
+System_Boundary(idpPlatform, "IDP Platform") {
+
+    Container(web, "Web Application", "React, TypeScript", "Предоставляет пользовательский интерфейс.", $tags="supporting")
+
+    Container(gateway, "API Gateway", "Go", "Проверяет токены и маршрутизирует запросы.", $tags="belonging-but-not-considered", $baseShape="hexagon")
+
+    Container(developmentService, "Development Plan Service", "Go", "Управляет ИПР, задачами, оценками, комментариями, адаптацией и напоминаниями. Работает с вложениями, публикует и обрабатывает события развития.", $tags="focus")
+
+    ContainerDb(developmentDb, "Development Plan DB", "PostgreSQL", "Хранит планы, задачи, оценки, комментарии, шаблоны, напоминания, проекции и outbox событий развития.", $tags="belonging-but-not-considered")
+
+    ContainerQueue(eventStreams, "Брокер событий", "Apache Kafka", "Передаёт события между сервисами.", $tags="supporting")
+
+    ContainerDb(objectStorage, "Object Storage", "MinIO", "Хранит аватары, вложения и отчёты.", $tags="supporting")
+}
+
+' Пользовательский доступ
+Rel(employee, web, "Работает со своим развитием", "HTTPS")
+Rel(manager, web, "Управляет развитием команды", "HTTPS")
+Rel(hrAdmin, web, "Администрирует платформу", "HTTPS")
+
+Rel(web, gateway, "Вызывает API", "HTTPS / REST")
+Rel(gateway, developmentService, "Запросы ИПР и адаптации", "HTTPS / REST / JSON")
+
+' Окружение Development Plan Service
+Rel(developmentService, developmentDb, "Читает и изменяет данные и outbox", "PostgreSQL / TLS")
+Rel(developmentService, eventStreams, "Публикует и читает события развития", "Kafka protocol / TLS")
+Rel(developmentService, objectStorage, "Работает с вложениями", "S3 API / HTTPS")
+
+SHOW_LEGEND()
+
+@enduml

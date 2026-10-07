@@ -1,0 +1,66 @@
+@startuml
+!ENABLE_ALL_PLANT_ELEMENTS = 1
+!include <C4/C4_Component>
+
+title IDP Platform — диаграмма компонентов\nКонтейнер: Talent Service (Go)
+
+LAYOUT_TOP_DOWN()
+
+' ---------- Теги слоёв ----------
+AddElementTag("presentation", $bgColor="#1168BD", $fontColor="#FFFFFF", $borderColor="#0B4884", $legendText="Слой представления")
+AddElementTag("application",  $bgColor="#2E8B57", $fontColor="#FFFFFF", $borderColor="#1F6B40", $legendText="Слой приложения")
+AddElementTag("domain",       $bgColor="#B8860B", $fontColor="#FFFFFF", $borderColor="#8A650A", $legendText="Слой предметной области")
+AddElementTag("infra",        $bgColor="#7B5EA7", $fontColor="#FFFFFF", $borderColor="#58427C", $legendText="Инфраструктурный слой")
+AddElementTag("supporting",   $bgColor="#EEEEEE", $fontColor="#333333", $borderColor="#999999", $legendText="Связанные контейнеры")
+AddElementTag("db",           $bgColor="#1167bd85", $fontColor="#FFFFFF", $borderColor="#0B4884", $legendText="Контейнеры платформы вне фокуса")
+
+' ---------- Окружение ----------
+Container(gateway, "API Gateway", "Go", "Проверяет токены и маршрутизирует запросы.", $baseShape="hexagon", $tags="supporting")
+
+' ---------- Ключевой контейнер ----------
+Container_Boundary(talentService, "Talent Service — единый процесс Go (общее адресное пространство)") {
+
+    Boundary(presentationLayer, "Слой представления") {
+        Component(handlers, "API & Event Handlers", "Go, HTTP router, Kafka consumer", "Принимает REST-запросы и события Kafka, валидирует вход, преобразует DTO в команды и запросы, формирует ответы. Бизнес-логики не содержит.", $tags="presentation")
+    }
+
+    Boundary(applicationLayer, "Слой приложения") {
+        Component(appService, "Talent Application Service", "Go package", "Сценарии использования: компетенции, карьерные модели, обучение, кадровый резерв, Talent Profile. Проверка прав доступа, управление транзакциями, оркестрация домена и адаптеров.", $tags="application")
+    }
+
+    Boundary(domainLayer, "Слой предметной области") {
+        Component(domainModel, "Talent Domain Model", "Go package", "Агрегаты и сущности: Компетенции, карьерный путь, достижения в обучении, профиль таланта. Инварианты, доменные события, интерфейсы репозиториев (порты).", $tags="domain")
+        Component(gapEngine, "Skill Gap & Recommendation Engine", "Go package", "Доменные сервисы без ввода-вывода: расчёт пробелов в знаниях и формирование рекомендаций по развитию.", $tags="domain")
+    }
+
+    Boundary(infraLayer, "Инфраструктурный слой") {
+        Component(repository, "Talent Repository", "Go, pgx", "Реализует репозитории и транзакции. Сохраняет агрегаты, проекции и доменные события (outbox) в одной транзакции.", $tags="infra")
+        Component(integration, "Integration Adapters", "Go, HTTP client, Kafka producer", "LMS Client (anti-corruption layer к LMS) и Outbox Relay (публикация событий из outbox в Kafka, at-least-once).", $tags="infra")
+    }
+}
+
+' ---------- Внешние контейнеры ----------
+ContainerDb(talentDb, "Talent DB", "PostgreSQL", "Хранит компетенции, карьерные модели, обучение, кадровый резерв, проекции и outbox.", $tags="db")
+ContainerQueue(eventStreams, "Брокер событий", "Apache Kafka", "Передаёт события между сервисами.", $tags="supporting")
+System_Ext(lms, "LMS / Обучающая платформа", "Предоставляет курсы и результаты обучения.")
+
+' ---------- Связи ----------
+Rel(gateway, handlers, "Запросы компетенций и карьеры", "HTTPS / REST / JSON")
+Rel(handlers, eventStreams, "Читает события развития", "Kafka protocol / TLS")
+
+Rel(handlers, appService, "Команды и запросы", "TalentUseCases")
+
+Rel(appService, domainModel, "Оперирует агрегатами", "Go types")
+Rel(appService, gapEngine, "Рассчитывает пробелы в знаниях и рекомендации", "GapCalculator, Recommender")
+Rel(gapEngine, domainModel, "Использует модели и правила", "Go types")
+
+Rel(appService, repository, "Читает и сохраняет агрегаты", "Repository ports")
+Rel(appService, integration, "Запрашивает курсы и результаты", "LearningCatalogPort")
+Rel(integration, repository, "Читает и отмечает записи outbox", "OutboxStore")
+
+Rel(repository, talentDb, "Читает и изменяет данные и outbox", "PostgreSQL / TLS")
+Rel(integration, lms, "Получает курсы и результаты обучения", "HTTPS / REST / JSON")
+Rel(integration, eventStreams, "Публикует события развития", "Kafka protocol / TLS")
+
+SHOW_LEGEND()
+@enduml

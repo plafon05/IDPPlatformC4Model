@@ -1,0 +1,52 @@
+@startuml IDP_Platform_L2_Talent
+!ENABLE_ALL_PLANT_ELEMENTS = 1
+!include <C4/C4_Container>
+
+title IDP Platform — индивидуальная диаграмма контейнеров\nФокус: Talent Service
+
+LAYOUT_TOP_DOWN()
+
+AddElementTag("focus", $bgColor="#1168BD", $fontColor="#FFFFFF", $borderColor="#0B4884", $legendText="Контейнеры участника")
+AddElementTag("belonging-but-not-considered", $bgColor="#1167bd85", $fontColor="#FFFFFF", $borderColor="#0B4884", $legendText="Контейнеры платформы вне фокуса")
+AddElementTag("supporting", $bgColor="#EEEEEE", $fontColor="#333333", $borderColor="#999999", $legendText="Связанные контейнеры")
+
+' Пользователи
+together {
+    Person(employee, "Сотрудник", "Работает с компетенциями, карьерными целями и обучением.")
+    Person(manager, "Руководитель", "Оценивает компетенции и развитие сотрудников.")
+    Person(hrAdmin, "HR-администратор", "Управляет компетенциями, карьерными моделями и резервом.")
+}
+
+' Внешняя система
+System_Ext(lms, "LMS / Обучающая платформа", "Предоставляет курсы и результаты обучения.")
+
+' Контейнеры платформы
+System_Boundary(idpPlatform, "IDP Platform") {
+
+    Container(web, "Web Application", "React, TypeScript", "Предоставляет пользовательский интерфейс.", $tags="belonging-but-not-considered")
+
+    Container(gateway, "API Gateway", "Go", "Проверяет токены и маршрутизирует запросы.", $baseShape="hexagon", $tags="supporting")
+
+    Container(talentService, "Talent Service", "Go", "Управляет компетенциями, карьерными моделями, обучением и кадровым резервом. Формирует Talent Profile, Skill Gap и рекомендации по развитию.", $tags="focus")
+
+    ContainerDb(talentDb, "Talent DB", "PostgreSQL", "Хранит компетенции, карьерные модели, обучение, кадровый резерв, проекции и outbox.", $tags="belonging-but-not-considered")
+
+    ContainerQueue(eventStreams, "Брокер событий", "Apache Kafka", "Передаёт события между сервисами.", $tags="supporting")
+}
+
+' Пользовательский доступ
+Rel(employee, web, "Работает со своим развитием", "HTTPS")
+Rel(manager, web, "Управляет развитием команды", "HTTPS")
+Rel(hrAdmin, web, "Администрирует платформу", "HTTPS")
+
+Rel(web, gateway, "Вызывает API", "HTTPS / REST")
+Rel(gateway, talentService, "Запросы компетенций и карьеры", "HTTPS / REST / JSON")
+
+' Окружение Talent Service
+Rel(talentService, talentDb, "Читает и изменяет данные и outbox", "PostgreSQL / TLS")
+Rel(talentService, eventStreams, "Публикует и читает события развития", "Kafka protocol / TLS")
+Rel(talentService, lms, "Получает курсы и результаты обучения", "HTTPS / REST / JSON")
+
+SHOW_LEGEND()
+
+@enduml

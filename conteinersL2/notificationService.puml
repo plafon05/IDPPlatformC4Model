@@ -1,0 +1,52 @@
+@startuml IDP_Platform_L2_Notification
+!ENABLE_ALL_PLANT_ELEMENTS = 1
+!include <C4/C4_Container>
+
+title IDP Platform — индивидуальная диаграмма контейнеров\nФокус: Notification Service
+
+LAYOUT_TOP_DOWN()
+
+AddElementTag("focus", $bgColor="#1168BD", $fontColor="#FFFFFF", $borderColor="#0B4884", $legendText="Контейнеры участника")
+AddElementTag("belonging-but-not-considered", $bgColor="#1167bd85", $fontColor="#FFFFFF", $borderColor="#0B4884", $legendText="Контейнеры платформы вне фокуса")
+AddElementTag("supporting", $bgColor="#EEEEEE", $fontColor="#333333", $borderColor="#999999", $legendText="Связанные контейнеры")
+
+' Пользователи
+together {
+    Person(employee, "Сотрудник", "Работает со своим развитием и уведомлениями.")
+    Person(manager, "Руководитель", "Управляет развитием команды и просматривает уведомления.")
+    Person(hrAdmin, "HR-администратор", "Администрирует платформу и просматривает уведомления.")
+}
+
+' Внешняя система
+System_Ext(smtp, "Корпоративный SMTP-сервис", "Обеспечивает доставку email.")
+
+' Контейнеры платформы
+System_Boundary(idpPlatform, "IDP Platform") {
+
+    Container(web, "Web Application", "React, TypeScript", "Предоставляет пользовательский интерфейс.", $tags="supporting")
+
+    Container(gateway, "API Gateway", "Go", "Маршрутизирует запросы и проксирует SSE.", $tags="supporting", $baseShape="hexagon")
+
+    Container(notificationService, "Notification Service", "Go", "Доставляет email и in-app уведомления. Управляет настройками, историей, статусами прочтения и доставки, повторными попытками.", $tags="focus")
+
+    ContainerDb(notificationDb, "Notification DB", "PostgreSQL", "Хранит уведомления, настройки, историю, статусы прочтения и доставки, данные повторных попыток.", $tags="belonging-but-not-considered")
+
+    ContainerQueue(eventStreams, "Брокер событий", "Apache Kafka", "Передаёт события между сервисами.", $tags="belonging-but-not-considered")
+}
+
+' Пользовательский доступ
+Rel(employee, web, "Работает со своим развитием", "HTTPS")
+Rel(manager, web, "Управляет развитием команды", "HTTPS")
+Rel(hrAdmin, web, "Администрирует платформу", "HTTPS")
+
+Rel(web, gateway, "Вызывает API и получает уведомления", "HTTPS / REST / SSE")
+Rel(gateway, notificationService, "Запросы уведомлений и SSE", "HTTPS / REST / SSE")
+
+' Окружение Notification Service
+Rel(notificationService, eventStreams, "Читает события для уведомлений", "Kafka protocol / TLS")
+Rel(notificationService, notificationDb, "Хранит уведомления и статусы", "PostgreSQL / TLS")
+Rel(notificationService, smtp, "Отправляет email", "SMTP / TLS")
+
+SHOW_LEGEND()
+
+@enduml

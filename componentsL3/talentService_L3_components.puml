@@ -1,4 +1,4 @@
-@startuml IDPPlatforn_L3_Talent
+@startuml IDP_Platform_L3_Talent_Components
 !ENABLE_ALL_PLANT_ELEMENTS = 1
 !include <C4/C4_Component>
 
@@ -7,60 +7,81 @@ title IDP Platform — диаграмма компонентов\nКонтейн
 LAYOUT_TOP_DOWN()
 
 ' ---------- Теги слоёв ----------
-AddElementTag("presentation", $bgColor="#1168BD", $fontColor="#FFFFFF", $borderColor="#0B4884", $legendText="Слой представления")
-AddElementTag("application",  $bgColor="#2E8B57", $fontColor="#FFFFFF", $borderColor="#1F6B40", $legendText="Слой приложения")
-AddElementTag("domain",       $bgColor="#B8860B", $fontColor="#FFFFFF", $borderColor="#8A650A", $legendText="Слой предметной области")
-AddElementTag("infra",        $bgColor="#7B5EA7", $fontColor="#FFFFFF", $borderColor="#58427C", $legendText="Инфраструктурный слой")
+AddElementTag("presentation", $bgColor="#1168BD", $fontColor="#FFFFFF", $borderColor="#0B4884", $legendText="Presentation Layer (входные адаптеры)")
+AddElementTag("application",  $bgColor="#2E8B57", $fontColor="#FFFFFF", $borderColor="#1F6B40", $legendText="Application Layer (сценарии использования)")
+AddElementTag("domain",       $bgColor="#B8860B", $fontColor="#FFFFFF", $borderColor="#8A650A", $legendText="Domain Layer (бизнес-правила)")
+AddElementTag("infra",        $bgColor="#7B5EA7", $fontColor="#FFFFFF", $borderColor="#58427C", $legendText="Infrastructure Layer (выходные адаптеры)")
 AddElementTag("supporting",   $bgColor="#EEEEEE", $fontColor="#333333", $borderColor="#999999", $legendText="Связанные контейнеры")
 AddElementTag("db",           $bgColor="#1167bd85", $fontColor="#FFFFFF", $borderColor="#0B4884", $legendText="Контейнеры платформы вне фокуса")
 
-' ---------- Окружение ----------
+' ---------- Окружение Talent Service ----------
 Container(gateway, "API Gateway", "Go", "Проверяет токены и маршрутизирует запросы.", $baseShape="hexagon", $tags="supporting")
+
+System_Ext(lms, "LMS / Обучающая платформа", "Предоставляет курсы и результаты обучения.")
 
 ' ---------- Ключевой контейнер ----------
 Container_Boundary(talentService, "Talent Service — единый процесс Go (общее адресное пространство)") {
 
-    Boundary(presentationLayer, "Слой представления") {
-        Component(handlers, "API & Event Handlers", "Go, HTTP router, Kafka consumer", "Принимает REST-запросы и события Kafka, валидирует вход, преобразует DTO в команды и запросы, формирует ответы. Бизнес-логики не содержит.", $tags="presentation")
+    Boundary(presentationLayer, "Presentation Layer") {
+        Component(restApi, "REST API Handlers", "Go, HTTP router", "Принимает запросы от API Gateway, берёт идентификатор и роль пользователя из контекста запроса, валидирует вход, преобразует DTO в команды и запросы, формирует HTTP-ответы и коды ошибок.", $tags="presentation")
+        Component(eventConsumer, "Event Consumer", "Go, Kafka consumer", "Читает события из Kafka, десериализует и проверяет схему сообщений, передаёт их на обработку. Не содержит бизнес-логики.", $tags="presentation")
     }
 
-    Boundary(applicationLayer, "Слой приложения") {
-        Component(appService, "Talent Application Service", "Go package", "Сценарии использования: компетенции, карьерные модели, обучение, кадровый резерв, Talent Profile. Проверка прав доступа, управление транзакциями, оркестрация домена и адаптеров.", $tags="application")
+    Boundary(applicationLayer, "Application Layer") {
+        Component(competencySvc, "Competency Service", "Go package", "Сценарии: ведение справочника компетенций и уровней, оценка компетенций сотрудника руководителем, самооценка.", $tags="application")
+        Component(careerSvc, "Career Model Service", "Go package", "Сценарии: ведение карьерных моделей, ролей и их требований к компетенциям, определение целевых ролей сотрудника.", $tags="application")
+        Component(learningSvc, "Learning Service", "Go package", "Сценарии: каталог обучения, синхронизация курсов и результатов из LMS, учёт обучения сотрудника.", $tags="application")
+        Component(reserveSvc, "Talent Reserve Service", "Go package", "Сценарии: ведение кадрового резерва, включение и исключение кандидатов, оценка готовности к целевой роли.", $tags="application")
+        Component(profileSvc, "Talent Profile Service", "Go package", "Сценарии: сборка Talent Profile сотрудника, запрос расчёта Skill Gap и рекомендаций по развитию.", $tags="application")
+        Component(projectionSvc, "Projection Sync Service", "Go package", "Сценарии: идемпотентное обновление локальных проекций (сотрудники, оргструктура) по входящим событиям.", $tags="application")
     }
 
-    Boundary(domainLayer, "Слой предметной области") {
-        Component(domainModel, "Talent Domain Model", "Go package", "Агрегаты и сущности: Компетенции, карьерный путь, достижения в обучении, профиль таланта. Инварианты, доменные события, интерфейсы репозиториев (порты).", $tags="domain")
-        Component(gapEngine, "Skill Gap & Recommendation Engine", "Go package", "Доменные сервисы без ввода-вывода: расчёт пробелов в знаниях и формирование рекомендаций по развитию.", $tags="domain")
+    Boundary(domainLayer, "Domain Layer") {
+        Component(domainModel, "Domain Model", "Go package", "Агрегаты и сущности: Competency, CareerModel, CareerRole, LearningRecord, ReserveEntry, TalentProfile. Инварианты, доменные события, интерфейсы репозиториев (порты).", $tags="domain")
+        Component(gapEngine, "Skill Gap & Recommendation Engine", "Go package", "Доменные сервисы без ввода-вывода: расчёт Skill Gap (требования роли против фактических уровней), ранжирование курсов для рекомендаций.", $tags="domain")
     }
 
-    Boundary(infraLayer, "Инфраструктурный слой") {
-        Component(repository, "Talent Repository", "Go, pgx", "Реализует репозитории и транзакции. Сохраняет агрегаты, проекции и доменные события (outbox) в одной транзакции.", $tags="infra")
-        Component(integration, "Integration Adapters", "Go, HTTP client, Kafka producer", "LMS Client (anti-corruption layer к LMS) и Outbox Relay (публикация событий из outbox в Kafka, at-least-once).", $tags="infra")
+    Boundary(infraLayer, "Infrastructure Layer") {
+        Component(repository, "Talent Repository", "Go, pgx", "Реализует репозитории и транзакции. Сохраняет изменения агрегатов и доменные события (outbox) в одной транзакции. Хранит проекции.", $tags="infra")
+        Component(lmsClient, "LMS Client", "Go, HTTP client", "Адаптер к REST API LMS (anti-corruption layer): маппинг моделей LMS, таймауты, повторы, circuit breaker.", $tags="infra")
+        Component(outboxRelay, "Outbox Relay", "Go, фоновый воркер", "Вычитывает неотправленные записи outbox, публикует их в Kafka, помечает отправленными (доставка at-least-once).", $tags="infra")
     }
 }
 
 ' ---------- Внешние контейнеры ----------
 ContainerDb(talentDb, "Talent DB", "PostgreSQL", "Хранит компетенции, карьерные модели, обучение, кадровый резерв, проекции и outbox.", $tags="db")
 ContainerQueue(eventStreams, "Брокер событий", "Apache Kafka", "Передаёт события между сервисами.", $tags="supporting")
-System_Ext(lms, "LMS / Обучающая платформа", "Предоставляет курсы и результаты обучения.")
 
-' ---------- Связи ----------
-Rel(gateway, handlers, "Запросы компетенций и карьеры", "HTTPS / REST / JSON")
-Rel(handlers, eventStreams, "Читает события развития", "Kafka protocol / TLS")
+' ---------- Вход в контейнер ----------
+Rel(gateway, restApi, "Запросы компетенций и карьеры", "HTTPS / REST / JSON")
+Rel(eventConsumer, eventStreams, "Читает события развития", "Kafka protocol / TLS")
 
-Rel(handlers, appService, "Команды и запросы", "TalentUseCases")
+' ---------- Presentation -> Application ----------
+Rel(restApi, competencySvc, "Команды и запросы", "CompetencyUseCases")
+Rel(restApi, careerSvc, "Команды и запросы", "CareerModelUseCases")
+Rel(restApi, learningSvc, "Команды и запросы", "LearningUseCases")
+Rel(restApi, reserveSvc, "Команды и запросы", "ReserveUseCases")
+Rel(restApi, profileSvc, "Запросы профиля", "ProfileUseCases")
+Rel(eventConsumer, projectionSvc, "Передаёт события", "ProjectionUseCases")
 
-Rel(appService, domainModel, "Оперирует агрегатами", "Go types")
-Rel(appService, gapEngine, "Рассчитывает пробелы в знаниях и рекомендации", "GapCalculator, Recommender")
+' ---------- Внутри Application Layer ----------
+Rel(reserveSvc, profileSvc, "Запрашивает Skill Gap кандидата", "ProfileUseCases")
+
+' ---------- Application -> Domain ----------
+Rel(applicationLayer, domainModel, "Оперирует агрегатами, вызывает инварианты", "Go types")
+Rel(profileSvc, gapEngine, "Рассчитывает Skill Gap и рекомендации", "GapCalculator, Recommender")
 Rel(gapEngine, domainModel, "Использует модели и правила", "Go types")
 
-Rel(appService, repository, "Читает и сохраняет агрегаты", "Repository ports")
-Rel(appService, integration, "Запрашивает курсы и результаты", "LearningCatalogPort")
-Rel(integration, repository, "Читает и отмечает записи outbox", "OutboxStore")
+' ---------- Application -> Infrastructure (через порты) ----------
+Rel(applicationLayer, repository, "Читает и сохраняет агрегаты и проекции", "Repository ports")
+Rel(learningSvc, lmsClient, "Запрашивает курсы и результаты", "LearningCatalogPort")
 
+' ---------- Infrastructure -> внешние контейнеры ----------
 Rel(repository, talentDb, "Читает и изменяет данные и outbox", "PostgreSQL / TLS")
-Rel(integration, lms, "Получает курсы и результаты обучения", "HTTPS / REST / JSON")
-Rel(integration, eventStreams, "Публикует события развития", "Kafka protocol / TLS")
+Rel(lmsClient, lms, "Получает курсы и результаты обучения", "HTTPS / REST / JSON")
+Rel(outboxRelay, repository, "Читает пачку и отмечает отправленные", "OutboxStore")
+Rel(outboxRelay, eventStreams, "Публикует события развития", "Kafka protocol / TLS")
 
 SHOW_LEGEND()
+
 @enduml

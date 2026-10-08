@@ -1,3 +1,4 @@
+plantuml
 @startuml IDP_Platform_Notification_Service_L3
 
 '!ENABLE_ALL_PLANT_ELEMENTS = 1
@@ -66,19 +67,17 @@ Rel(notificationServiceApp, notificationRepo, "Сохраняет уведомл
 
 Rel(notificationServiceApp, settingsRepo, "Получает настройки каналов доставки пользователя", "In-process / Go call")
 
-Rel(notificationServiceApp, templateEngine, "Запрашивает формирование содержимого уведомления", "In-process / Go call")
-
 Rel(notificationServiceApp, jobRepo, "Создаёт задание асинхронной доставки", "In-process / Go call")
 
-Rel(notificationServiceApp, smtpAdapter, "Передаёт подготовленное email-сообщение на отправку", "In-process / Go call")
-
 Rel(notificationServiceApp, sseHandler, "Передаёт новое in-app уведомление активному подключению", "In-process / Go channel")
+
+Rel(deliveryService, jobRepo, "Получает задания, фиксирует выполнение и планирует повторные попытки", "In-process / Go call")
+
+Rel(deliveryService, templateEngine, "Запрашивает формирование содержимого уведомления", "In-process / Go call")
 
 Rel(deliveryService, smtpAdapter, "Передаёт email-сообщение для доставки", "In-process / Go call")
 
 Rel(deliveryService, notificationRepo, "Обновляет статус доставки уведомления", "In-process / Go call")
-
-Rel(deliveryService, jobRepo, "Фиксирует выполнение или планирует повторную попытку", "In-process / Go call")
 
 Rel(templateEngine, templateRepo, "Получает шаблон требуемого типа уведомления", "In-process / Go call")
 
@@ -96,3 +95,4 @@ Rel(jobRepo, notificationDb, "Создаёт, выбирает и изменяе
 SHOW_LEGEND()
 
 @enduml
+

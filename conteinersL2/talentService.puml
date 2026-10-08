@@ -23,7 +23,7 @@ System_Ext(lms, "LMS / Обучающая платформа", "Предоста
 ' Контейнеры платформы
 System_Boundary(idpPlatform, "IDP Platform") {
 
-    Container(web, "Web Application", "React, TypeScript", "Предоставляет пользовательский интерфейс.", $tags="belonging-but-not-considered")
+    Container(web, "Web Application", "React, TypeScript", "Предоставляет пользовательский интерфейс.", $tags="supporting")
 
     Container(gateway, "API Gateway", "Go", "Проверяет токены и маршрутизирует запросы.", $baseShape="hexagon", $tags="supporting")
 

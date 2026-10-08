@@ -1,0 +1,94 @@
+@startuml IDP_Platform_DevelopmentPlanService_L3
+!ENABLE_ALL_PLANT_ELEMENTS = 1
+!include <C4/C4_Component>
+
+title IDP Platform — Development Plan Service — диаграмма компонентов (L3)
+
+LAYOUT_TOP_DOWN()
+
+System_Boundary(idpPlatform, "IDP Platform") {
+
+    Container(gateway, "API Gateway", "Go", "Маршрутизирует запросы, проверяет токены и ограничивает частоту запросов.")
+    ContainerQueue(eventStreams, "Брокер событий", "Apache Kafka", "Передаёт кадровые события, изменения компетенций и события развития между сервисами.")
+
+    Container_Boundary(developmentService, "Development Plan Service") {
+
+        together {
+            Component(developmentApi, "Development API Controller", "Go / HTTP Handler", "Принимает REST-запросы по ИПР, задачам, оценкам, адаптации и шаблонам и передаёт их прикладным сервисам.")
+            Component(eventConsumer, "Kafka Event Consumer", "Go / Kafka Client", "Получает кадровые события и изменения компетенций из Apache Kafka.")
+            Component(reminderWorker, "Reminder Worker", "Go Background Worker", "По расписанию запускает цикл формирования напоминаний о сроках задач.")
+            Component(outboxWorker, "Outbox Publishing Worker", "Go Background Worker", "По расписанию запускает цикл публикации событий outbox.")
+        }
+
+        together {
+            Component(templateAppService, "Template Service", "Go Application Service", "Реализует операции с шаблонами ИПР и программ адаптации.")
+            Component(planAppService, "Development Plan Service", "Go Application Service", "Реализует операции с ИПР и задачами: создание по шаблону, согласование руководителем и закрытие плана.")
+            Component(assessmentAppService, "Assessment & Comment Service", "Go Application Service", "Реализует оценку выполнения задач, комментарии и работу с вложениями.")
+            Component(adaptationAppService, "Adaptation Service", "Go Application Service", "Создаёт программы адаптации новых сотрудников по шаблонам и отслеживает их прохождение.")
+            Component(projectionAppService, "Development Projection Service", "Go Application Service", "Обновляет локальные проекции сотрудников, оргструктуры, ролей и компетенций по событиям других сервисов.")
+            Component(reminderAppService, "Reminder Service", "Go Application Service", "Находит задачи с приближающимся сроком и формирует события напоминаний.")
+            Component(outboxPublishService, "Outbox Publication Service", "Go Application Service", "Получает pending-события, публикует их и фиксирует результат.")
+        }
+
+        together {
+            Component(templateRepo, "Template Repository", "Go / pgx", "Читает и сохраняет шаблоны ИПР и адаптации.")
+            Component(planRepo, "Plan Repository", "Go / pgx", "Читает и сохраняет планы и задачи и записывает их события в outbox в той же транзакции.")
+            Component(assessmentRepo, "Assessment Repository", "Go / pgx", "Сохраняет оценки и комментарии и записывает их события в outbox в той же транзакции.")
+            Component(adaptationRepo, "Adaptation Repository", "Go / pgx", "Сохраняет программы адаптации и записывает их события в outbox в той же транзакции.")
+            Component(projectionRepo, "Projection Repository", "Go / pgx", "Читает и сохраняет локальные проекции сотрудников, оргструктуры, ролей и компетенций.")
+            Component(reminderRepo, "Reminder Repository", "Go / pgx", "Выбирает задачи с приближающимся сроком, фиксирует напоминания и записывает их события в outbox.")
+            Component(outboxRepo, "Outbox Repository", "Go / pgx", "Выдаёт pending-события и отмечает опубликованные.")
+            Component(attachmentStorage, "Attachment Storage Adapter", "Go / S3 Client", "Сохраняет, получает и удаляет вложения в MinIO.")
+            Component(kafkaProducer, "Kafka Producer", "Go / Kafka Client", "Публикует события ИПР, адаптации и напоминаний в Apache Kafka.")
+        }
+    }
+
+    ContainerDb(developmentDb, "Development Plan DB", "PostgreSQL", "Хранит планы, задачи, оценки, комментарии, шаблоны, напоминания, проекции и outbox.")
+    ContainerDb(objectStorage, "Object Storage", "MinIO", "Хранит вложения к задачам ИПР.")
+}
+
+Rel(gateway, developmentApi, "Передаёт запросы ИПР и адаптации", "HTTPS / REST / JSON")
+Rel(eventStreams, eventConsumer, "Передаёт кадровые события и изменения компетенций", "Kafka protocol / TLS")
+
+Rel(developmentApi, templateAppService, "Операции с шаблонами", "Go Call")
+Rel(developmentApi, planAppService, "Операции с ИПР и задачами", "Go Call")
+Rel(developmentApi, assessmentAppService, "Оценки, комментарии и вложения", "Go Call")
+Rel(developmentApi, adaptationAppService, "Операции с адаптацией", "Go Call")
+
+Rel(eventConsumer, adaptationAppService, "Передаёт событие приёма сотрудника", "Go Call")
+Rel(eventConsumer, projectionAppService, "Передаёт изменения сотрудников, оргструктуры, ролей и компетенций", "Go Call")
+
+Rel(reminderWorker, reminderAppService, "Запускает цикл напоминаний", "Go Call")
+Rel(outboxWorker, outboxPublishService, "Запускает цикл публикации", "Go Call")
+
+Rel(templateAppService, templateRepo, "Читает и сохраняет шаблоны", "Go Call")
+Rel(planAppService, templateRepo, "Получает шаблон ИПР", "Go Call")
+Rel(planAppService, planRepo, "Читает и сохраняет планы и задачи", "Go Call")
+Rel(planAppService, projectionRepo, "Получает данные сотрудников, руководителей и компетенций", "Go Call")
+
+Rel(assessmentAppService, assessmentRepo, "Сохраняет оценки и комментарии", "Go Call")
+Rel(assessmentAppService, attachmentStorage, "Работает с вложениями", "Go Call")
+
+Rel(adaptationAppService, templateRepo, "Получает шаблон программы адаптации", "Go Call")
+Rel(adaptationAppService, adaptationRepo, "Читает и сохраняет программы адаптации", "Go Call")
+
+Rel(projectionAppService, projectionRepo, "Обновляет локальные проекции", "Go Call")
+
+Rel(reminderAppService, reminderRepo, "Получает задачи и фиксирует напоминания", "Go Call")
+
+Rel(outboxPublishService, outboxRepo, "Читает pending и фиксирует результат", "Go Call")
+Rel(outboxPublishService, kafkaProducer, "Передаёт событие на публикацию", "Go Call")
+
+Rel(templateRepo, developmentDb, "Шаблоны", "PostgreSQL / TLS")
+Rel(planRepo, developmentDb, "Планы, задачи и outbox", "PostgreSQL / TLS")
+Rel(assessmentRepo, developmentDb, "Оценки, комментарии и outbox", "PostgreSQL / TLS")
+Rel(adaptationRepo, developmentDb, "Программы адаптации и outbox", "PostgreSQL / TLS")
+Rel(projectionRepo, developmentDb, "Проекции", "PostgreSQL / TLS")
+Rel(reminderRepo, developmentDb, "Напоминания и outbox", "PostgreSQL / TLS")
+Rel(outboxRepo, developmentDb, "Outbox", "PostgreSQL / TLS")
+
+Rel(attachmentStorage, objectStorage, "Работает с файлами вложений", "S3 API / HTTPS")
+Rel(kafkaProducer, eventStreams, "Публикует события развития и напоминаний", "Kafka protocol / TLS")
+
+SHOW_LEGEND()
+@enduml

@@ -1,4 +1,3 @@
-plantuml
 @startuml IDP_Platform_Notification_Service_L3
 
 '!ENABLE_ALL_PLANT_ELEMENTS = 1
@@ -26,13 +25,11 @@ System_Boundary(idpPlatform, "IDP Platform") {
 
         Component(workerPool, "Delivery Worker Pool", "Go / Async Workers", "Запускает асинхронную обработку заданий доставки.")
 
-
         Component(notificationServiceApp, "Notification Application Service", "Go / Application Service", "Управляет созданием, чтением и состоянием уведомлений.")
 
         Component(deliveryService, "Delivery Service", "Go / Application Service", "Оркестрирует выполнение и повторные попытки доставки уведомлений.")
 
         Component(templateEngine, "Template Engine", "Go / text/template", "Формирует содержимое уведомления из шаблона и payload события.")
-
 
         Component(notificationRepo, "Notification Repository", "Go / SQL", "Читает и сохраняет уведомления, статусы прочтения и доставки.")
 
@@ -41,7 +38,6 @@ System_Boundary(idpPlatform, "IDP Platform") {
         Component(templateRepo, "Template Repository", "Go / SQL", "Загружает шаблоны уведомлений.")
 
         Component(jobRepo, "Delivery Job Repository", "Go / SQL", "Создаёт, выбирает и изменяет задания асинхронной доставки.")
-
 
         Component(smtpAdapter, "SMTP Adapter", "Go / SMTP Client", "Изолирует прикладную логику от протокола SMTP.")
     }
@@ -69,11 +65,11 @@ Rel(notificationServiceApp, settingsRepo, "Получает настройки �
 
 Rel(notificationServiceApp, jobRepo, "Создаёт задание асинхронной доставки", "In-process / Go call")
 
-Rel(notificationServiceApp, sseHandler, "Передаёт новое in-app уведомление активному подключению", "In-process / Go channel")
-
 Rel(deliveryService, jobRepo, "Получает задания, фиксирует выполнение и планирует повторные попытки", "In-process / Go call")
 
 Rel(deliveryService, templateEngine, "Запрашивает формирование содержимого уведомления", "In-process / Go call")
+
+Rel(deliveryService, sseHandler, "Передаёт новое in-app уведомление активному подключению", "In-process / Go channel")
 
 Rel(deliveryService, smtpAdapter, "Передаёт email-сообщение для доставки", "In-process / Go call")
 
@@ -90,7 +86,6 @@ Rel(settingsRepo, notificationDb, "Читает и сохраняет настр
 Rel(templateRepo, notificationDb, "Читает шаблоны уведомлений", "PostgreSQL / TCP 5432 / TLS")
 
 Rel(jobRepo, notificationDb, "Создаёт, выбирает и изменяет задания доставки", "PostgreSQL / TCP 5432 / TLS")
-
 
 SHOW_LEGEND()
 

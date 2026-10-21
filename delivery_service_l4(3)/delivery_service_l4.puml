@@ -1,0 +1,106 @@
+@startuml
+title Диаграмма кода UML — Delivery Service (Level 4)
+
+package "Сервис доставки и контракт шаблонов" {
+  interface TemplateEngine <<interface>> {
+    +Render(ctx: context.Context, notification: Notification): (Notification, error)
+  }
+
+  class DeliveryService <<service>> {
+    -jobs: DeliveryJobRepository
+    -registry: StrategyRegistry
+    -templates: TemplateEngine
+    +Get(ctx: context.Context, id: string): (DeliveryJob, error)
+    +Send(ctx: context.Context, id: string): (DeliveryJob, error)
+  }
+}
+
+package "Стратегии доставки (Application)" {
+  class StrategyRegistry <<registry>> {
+    -byChannel: map[Channel]DeliveryStrategy
+    +Register(channel: Channel, strategy: DeliveryStrategy): error
+    +Resolve(channel: Channel): (DeliveryStrategy, error)
+  }
+
+  interface DeliveryStrategy <<interface>> {
+    +Deliver(ctx: context.Context, notification: Notification): error
+  }
+
+  class EmailDeliveryStrategy <<strategy>> {
+    -sender: EmailSender
+    +Deliver(ctx: context.Context, notification: Notification): error
+  }
+
+  class InAppDeliveryStrategy <<strategy>> {
+    -notifications: NotificationRepository
+    -publisher: Publisher
+    +Deliver(ctx: context.Context, notification: Notification): error
+  }
+}
+
+package "Внешние интерфейсы" {
+  interface EmailSender <<interface>> {
+    +Send(ctx: context.Context, notification: Notification): error
+  }
+
+  interface Publisher <<interface>> {
+    +Publish(ctx: context.Context, message: Notification): error
+  }
+
+  interface DeliveryJobRepository <<interface>> {
+    +Get(ctx: context.Context, id: string): (DeliveryJob, error)
+    +Save(ctx: context.Context, job: DeliveryJob): error
+  }
+
+  interface NotificationRepository <<interface>> {
+    +SaveInApp(ctx: context.Context, message: Notification): error
+  }
+}
+
+package "Домен" {
+  class Notification <<aggregate>> {
+    +ID: string
+    +UserID: string
+    +EmailAddress: string
+    +Title: string
+    +Body: string
+  }
+
+  class DeliveryJob <<aggregate>> {
+    +ID: string
+    +Channel: Channel
+    +Notification: Notification
+    +Status: JobStatus
+    +Attempts: int
+    +LastError: string
+    +Start(): error
+    +MarkDelivered(): error
+    +MarkFailed(reason: string): error
+  }
+
+  enum Channel <<enumeration>> {
+    Email
+    InApp
+  }
+
+  enum JobStatus <<enumeration>> {
+    Pending
+    Delivered
+    Failed
+  }
+}
+
+TemplateEngine <.. DeliveryService : формирует содержимое
+DeliveryService --> DeliveryJobRepository : получает и сохраняет задания
+DeliveryService --> StrategyRegistry : выбирает стратегию
+StrategyRegistry o-- "0..*" DeliveryStrategy : хранит стратегии
+DeliveryStrategy <|.. EmailDeliveryStrategy : реализует
+DeliveryStrategy <|.. InAppDeliveryStrategy : реализует
+EmailDeliveryStrategy --> EmailSender : отправляет email
+InAppDeliveryStrategy --> NotificationRepository : сохраняет in-app сообщение
+InAppDeliveryStrategy --> Publisher : публикует событие для SSE
+DeliveryService ..> DeliveryJob : управляет заданием
+DeliveryService ..> Notification : использует данные уведомления
+DeliveryJob ..> Channel : определяет канал
+DeliveryJob ..> JobStatus : использует статус
+@enduml

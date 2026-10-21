@@ -144,7 +144,7 @@ Repository ..> LevelRecord : собирает
 Repository ..> DevelopmentPlan : собирает
 
 note right of Engine
-  <b>Правила (Notion §6, §8, §9)</b>
+  <b>Правила</b>
   1. Действующий уровень = последний <b>Final</b> по SetAt.
      Pending в расчёт не идёт; показывается, только если новее Final.
      Самооценка и отклонённые оценки в движок не передаются.

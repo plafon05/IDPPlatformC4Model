@@ -1,0 +1,160 @@
+@startuml IDP_Platform_Talent_SkillGapEngine_Class
+title IDP Platform — Talent Service\nUML Class Diagram: Skill Gap & Recommendation Engine\n(редакция 3, упрощённая)
+
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam nodesep 35
+skinparam ranksep 50
+skinparam packageStyle rectangle
+skinparam class {
+  BackgroundColor #FFFFFF
+  BorderColor #555555
+  ArrowColor #444444
+}
+skinparam note {
+  BackgroundColor #FFFBE6
+  BorderColor #B8860B
+}
+hide empty members
+top to bottom direction
+
+' ==================================================================
+'  Phase 2: сервис и репозиторий (Application + Infrastructure)
+' ==================================================================
+package "internal/talent   ·   Talent Profile Service + Talent Repository  (Phase 2)" as pkgTalent #E3F2E9 {
+
+  class Service {
+    -repo : *Repository
+    --
+    +NewService(db *pgxpool.Pool) *Service
+    +SkillGap(ctx, employeeID, profileID string, version int) (*SkillGapResult, error)
+  }
+
+  class SkillGapResult {
+    +Report : skillgap.Report
+    +Recommendations : skillgap.Recommendations
+  }
+
+  class Repository {
+    -db : *pgxpool.Pool
+    --
+    +GetProfile(ctx, profileID string, version int) (skillgap.PositionProfile, error)
+    +GetLevelRecords(ctx, employeeID string) ([]skillgap.LevelRecord, error)
+    +ListPlans(ctx) ([]skillgap.DevelopmentPlan, error)
+  }
+
+  Service *--> Repository
+  Service ..> SkillGapResult : возвращает
+}
+
+' ==================================================================
+'  Phase 1: движок (Domain Layer) — чистые функции
+' ==================================================================
+package "internal/talent/skillgap   ·   Skill Gap & Recommendation Engine  (Phase 1: без БД, HTTP и часов)" as pkgGap #FFF4D6 {
+
+  class "skillgap" as Engine <<functions>> {
+    +Calculate(profile PositionProfile, records []LevelRecord) Report
+    +Recommend(report Report, plans []DevelopmentPlan, limit int) Recommendations
+    -resolveLevels(records []LevelRecord, competencyID string) (effective, pending *int)
+  }
+
+  class PositionProfile {
+    +ID : string
+    +Version : int
+    +Name : string
+    +Requirements : []Requirement
+  }
+
+  class Requirement {
+    +CompetencyID : string
+    +RequiredLevel : int
+  }
+
+  enum LevelStatus {
+    StatusFinal = 1
+    StatusPending = 2
+  }
+
+  class LevelRecord {
+    +CompetencyID : string
+    +Level : int
+    +Status : LevelStatus
+    +SetAt : time.Time
+  }
+
+  class DevelopmentPlan {
+    +ID : string
+    +Title : string
+    +CompetencyIDs : []string
+  }
+
+  enum GapStatus {
+    GapMet = 1
+    GapDeficit = 2
+    GapNotAssessed = 3
+  }
+
+  class Item {
+    +CompetencyID : string
+    +RequiredLevel : int
+    +Status : GapStatus
+    +Effective : *int  «nil = не оценена»
+    +Pending : *int  «только для показа»
+    +Delta : int
+  }
+
+  class Report {
+    +ProfileID : string
+    +ProfileVersion : int
+    +Items : []Item
+    --
+    +Deficits() []Item
+    +NotAssessed() []Item
+    +HasSufficientData() bool
+  }
+
+  class Recommendations {
+    +AssessFirst : []string
+    +Plans : []PlanRecommendation
+  }
+
+  class PlanRecommendation {
+    +Plan : DevelopmentPlan
+    +Covers : []string
+    +Score : int
+  }
+
+  PositionProfile "1" *-- "1..*" Requirement
+  LevelRecord --> LevelStatus
+  Report "1" *-- "1..*" Item
+  Item --> GapStatus
+  Recommendations "1" *-- "0..*" PlanRecommendation
+  PlanRecommendation o-- DevelopmentPlan
+
+  Engine ..> PositionProfile : вход
+  Engine ..> LevelRecord : вход
+  Engine ..> DevelopmentPlan : вход
+  Engine ..> Report : Calculate()
+  Engine ..> Recommendations : Recommend()
+}
+
+Service ..> Engine : вызывает Calculate и Recommend
+Repository ..> PositionProfile : собирает
+Repository ..> LevelRecord : собирает
+Repository ..> DevelopmentPlan : собирает
+
+note right of Engine
+  <b>Правила (Notion §6, §8, §9)</b>
+  1. Действующий уровень = последний <b>Final</b> по SetAt.
+     Pending в расчёт не идёт; показывается, только если новее Final.
+     Самооценка и отклонённые оценки в движок не передаются.
+  2. Нет Final → <b>GapNotAssessed</b> («не оценена», не равно 0).
+     Final < Required → <b>GapDeficit</b>, Delta = Required − Final.
+     Иначе → <b>GapMet</b>.
+  3. AssessFirst = все не оценённые («сначала провести оценку»).
+  4. ПР рекомендуется, только если закрывает хотя бы один дефицит.
+     Score = Σ Delta закрываемых дефицитов.
+     Порядок: Score ↓, ID ↑; не больше limit.
+end note
+
+@enduml

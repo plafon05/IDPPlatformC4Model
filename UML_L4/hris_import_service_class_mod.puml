@@ -1,0 +1,127 @@
+@startuml HRIS_Import_Service_L4
+
+title Диаграмма классов UML (Level 4: Code — Go)\nКомпонент: HRIS Import Service 
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam class {
+    BackgroundColor White
+    ArrowColor #2C3E50
+    BorderColor #2C3E50
+}
+
+package "Domain Contracts (Go Models)" #F9F9F9 {
+    enum TargetService <<type string>> {
+        TargetEmployee = "EMPLOYEE"
+        TargetOrganization = "ORGANIZATION"
+        TargetRole = "ROLE"
+    }
+
+    class ChangeRecord <<struct>> {
+        + RecordID: string
+        + TargetService: TargetService
+        + EntityID: string
+        + Data: map[string]any
+        + Timestamp: time.Time
+    }
+}
+
+package "Ports (Go Interfaces — DIP)" #FEFDFB {
+    interface HRISClientPort <<interface>> {
+        + {abstract} FetchChanges(ctx: context.Context, since: time.Time): ([]ChangeRecord, error)
+    }
+
+    interface SyncStatePort <<interface>> {
+        + {abstract} GetCheckpoint(ctx: context.Context): (time.Time, error)
+        + {abstract} SetCheckpoint(ctx: context.Context, checkpoint: time.Time): error
+    }
+
+    interface EmployeeServicePort <<interface>> {
+        + {abstract} ProcessEmployeeUpdate(ctx: context.Context, entityID: string, data: map[string]any): error
+    }
+
+    interface OrganizationServicePort <<interface>> {
+        + {abstract} ProcessOrganizationUpdate(ctx: context.Context, entityID: string, data: map[string]any): error
+    }
+
+    interface RoleServicePort <<interface>> {
+        + {abstract} ProcessRoleUpdate(ctx: context.Context, entityID: string, data: map[string]any): error
+    }
+}
+
+package "Application Layer (Go Use Cases & Strategies)" #F0F4F8 {
+    class HRISImportService <<struct>> {
+        - fetchUC: *FetchHRISDataUseCase
+        - applyUC: *ApplyHRISDataUseCase
+        + RunImportCycle(ctx: context.Context): error
+    }
+
+    class FetchHRISDataUseCase <<struct>> {
+        - syncState: SyncStatePort
+        - hrisClient: HRISClientPort
+        + Execute(ctx: context.Context): ([]ChangeRecord, error)
+    }
+
+    class ApplyHRISDataUseCase <<struct>> {
+        - registry: *StrategyRegistry
+        - syncState: SyncStatePort
+        + Execute(ctx: context.Context, changes: []ChangeRecord): error
+    }
+
+    class StrategyRegistry <<struct>> {
+        - strategies: map[TargetService]ChangeDispatchStrategy
+        + Register(strategy: ChangeDispatchStrategy): void
+        + Get(target: TargetService): (ChangeDispatchStrategy, error)
+    }
+
+    interface ChangeDispatchStrategy <<interface>> {
+        + {abstract} TargetService(): TargetService
+        + {abstract} Dispatch(ctx: context.Context, change: ChangeRecord): error
+    }
+
+    class EmployeeDispatchStrategy <<struct>> {
+        - port: EmployeeServicePort
+        + TargetService(): TargetService
+        + Dispatch(ctx: context.Context, change: ChangeRecord): error
+    }
+
+    class OrganizationDispatchStrategy <<struct>> {
+        - port: OrganizationServicePort
+        + TargetService(): TargetService
+        + Dispatch(ctx: context.Context, change: ChangeRecord): error
+    }
+
+    class RoleDispatchStrategy <<struct>> {
+        - port: RoleServicePort
+        + TargetService(): TargetService
+        + Dispatch(ctx: context.Context, change: ChangeRecord): error
+    }
+}
+
+' Отношения реализации интерфейсов стратегий (Realization)
+ChangeDispatchStrategy <|.. EmployeeDispatchStrategy
+ChangeDispatchStrategy <|.. OrganizationDispatchStrategy
+ChangeDispatchStrategy <|.. RoleDispatchStrategy
+
+' Стратегии вызывают порты целевых сервисов (DIP)
+EmployeeDispatchStrategy --> EmployeeServicePort : передаёт изменения
+OrganizationDispatchStrategy --> OrganizationServicePort : передаёт изменения
+RoleDispatchStrategy --> RoleServicePort : передаёт изменения
+
+' Use Cases взаимодействуют через порты и реестр
+FetchHRISDataUseCase --> HRISClientPort : опрашивает внешнюю HRIS
+FetchHRISDataUseCase --> SyncStatePort : читает контрольную точку
+ApplyHRISDataUseCase --> SyncStatePort : фиксирует контрольную точку
+ApplyHRISDataUseCase --> StrategyRegistry : запрашивает стратегию по TargetService
+
+StrategyRegistry "1" o-- "*" ChangeDispatchStrategy : хранит зарегистрированные стратегии
+
+' Сервис оркестрирует Юзкейсы
+HRISImportService *-- FetchHRISDataUseCase : оркестрирует
+HRISImportService *-- ApplyHRISDataUseCase : оркестрирует
+
+' Связи с доменной моделью ChangeRecord
+ChangeDispatchStrategy ..> ChangeRecord : обрабатывает
+HRISClientPort ..> ChangeRecord : возвращает
+ChangeRecord --> TargetService : типизирован
+
+@enduml

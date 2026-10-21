@@ -1,4 +1,4 @@
-@startuml
+@startuml delivery_service
 title Диаграмма кода UML — Delivery Service (Level 4)
 
 package "Сервис доставки и контракт шаблонов" {

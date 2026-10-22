@@ -1,0 +1,189 @@
+@startuml Development_Plan_Service_L4
+
+title Диаграмма классов UML (Level 4: Code — Go)\nКомпонент: Development Plan Service — выполнение заданий и взвешенный прогресс ИПР
+
+skinparam classAttributeIconSize 0
+hide empty members
+skinparam packageStyle rectangle
+skinparam class {
+    BackgroundColor White
+    ArrowColor #2C3E50
+    BorderColor #2C3E50
+}
+
+package "Application Layer (Go: контекст и стратегии)" #F0F4F8 {
+
+    class DevelopmentPlanService <<struct>> {
+        - plans: PlanRepository
+        - registry: *StrategyRegistry
+        {field} - now: func() time.Time
+        + SubmitResult(ctx: context.Context, cmd: SubmitResultCommand): (plan.Plan, error)
+        + ReviewTask(ctx: context.Context, cmd: ReviewTaskCommand): (plan.Plan, error)
+    }
+
+    class StrategyRegistry <<struct>> {
+        - mu: sync.RWMutex
+        - byCriterion: map[plan.Criterion]CompletionStrategy
+        + Register(strategy: CompletionStrategy): error
+        + Resolve(criterion: plan.Criterion): (CompletionStrategy, error)
+    }
+
+    interface CompletionStrategy <<interface>> {
+        + {abstract} Criterion(): plan.Criterion
+        + {abstract} IsMet(task: plan.Task, result: TaskResult): (bool, error)
+    }
+
+    class EmployeeMarkStrategy <<struct>> {
+        + Criterion(): plan.Criterion
+        + IsMet(task: plan.Task, result: TaskResult): (bool, error)
+    }
+
+    class LMSCourseStrategy <<struct>> {
+        + Criterion(): plan.Criterion
+        + IsMet(task: plan.Task, result: TaskResult): (bool, error)
+    }
+
+    class TestResultStrategy <<struct>> {
+        + Criterion(): plan.Criterion
+        + IsMet(task: plan.Task, result: TaskResult): (bool, error)
+    }
+
+    class SubmitResultCommand <<struct>> {
+        + PlanID: string
+        + TaskID: string
+        + Actor: Actor
+        + Result: TaskResult
+    }
+
+    class ReviewTaskCommand <<struct>> {
+        + PlanID: string
+        + TaskID: string
+        + Actor: Actor
+        + Approve: bool
+        + Comment: string
+    }
+
+    class TaskResult <<struct>> {
+        + Source: ResultSource
+        + AttachmentIDs: []string
+        + CourseCompleted: bool
+        + Score: *float64
+    }
+
+    class Actor <<struct>> {
+        + UserID: string
+        + System: bool
+    }
+
+    enum ResultSource <<type string>> {
+        SourceEmployee = "employee"
+        SourceLMS = "lms"
+        SourceTest = "test"
+    }
+}
+
+package "Ports (Go Interfaces — DIP)" #FEFDFB {
+    interface PlanRepository <<interface>> {
+        + {abstract} Get(ctx: context.Context, id: string): (plan.Plan, error)
+        + {abstract} Save(ctx: context.Context, p: plan.Plan, expectedVersion: int, events: []plan.TaskStatusChanged): error
+    }
+}
+
+package "Domain (Go: package plan)" #F9F9F9 {
+
+    class Plan <<aggregate>> {
+        + ID: string
+        + EmployeeID: string
+        + ManagerID: string
+        + Status: Status
+        + Version: int
+        + Tasks: []Task
+        + Progress(): *int
+        + Task(id: string): (*Task, error)
+        + AddTask(t: Task): error
+        + RemoveTask(id: string): error
+    }
+
+    class Task <<entity>> {
+        + ID: string
+        + Title: string
+        + Weight: int
+        + Criterion: Criterion
+        + RequiresReview: bool
+        + PassingScore: *float64
+        + Status: TaskStatus
+        + Start(): error
+        + Accept(): error
+        + Confirm(): error
+        + Return(): error
+    }
+
+    enum Status <<type string>> {
+        StatusDraft = "draft"
+        StatusActive = "active"
+        StatusCompleted = "completed"
+        StatusCancelled = "cancelled"
+    }
+
+    enum TaskStatus <<type string>> {
+        TaskNotStarted = "not_started"
+        TaskInProgress = "in_progress"
+        TaskOnReview = "on_review"
+        TaskCompleted = "completed"
+    }
+
+    enum Criterion <<type string>> {
+        CriterionEmployeeMark = "employee_mark"
+        CriterionLMSCourse = "lms_course"
+        CriterionTestResult = "test_result"
+    }
+
+    class TaskStatusChanged <<domain event>> {
+        + PlanID: string
+        + TaskID: string
+        + EmployeeID: string
+        + ManagerID: string
+        + From: TaskStatus
+        + To: TaskStatus
+        + Progress: *int
+        + OccurredAt: time.Time
+    }
+}
+
+' Паттерн «Стратегия»: контекст владеет реестром, реестр хранит стратегии
+DevelopmentPlanService *-- "1" StrategyRegistry : выбирает стратегию по task.Criterion
+StrategyRegistry "1" o-- "1..*" CompletionStrategy : хранит стратегии
+CompletionStrategy <|.. EmployeeMarkStrategy : реализует
+CompletionStrategy <|.. LMSCourseStrategy : реализует
+CompletionStrategy <|.. TestResultStrategy : реализует
+CompletionStrategy ..> TaskResult : проверяет
+CompletionStrategy ..> Task : читает критерий и порог
+
+' Порты (DIP)
+DevelopmentPlanService --> PlanRepository : загружает ИПР, сохраняет план и outbox
+PlanRepository ..> Plan : хранит
+
+' Команды
+DevelopmentPlanService ..> SubmitResultCommand : принимает
+DevelopmentPlanService ..> ReviewTaskCommand : принимает
+SubmitResultCommand *-- TaskResult
+SubmitResultCommand *-- Actor
+ReviewTaskCommand *-- Actor
+TaskResult --> ResultSource
+
+' Домен
+DevelopmentPlanService ..> TaskStatusChanged : создаёт событие
+Plan "1" *-- "0..*" Task : актуальный состав заданий
+Plan --> Status
+Task --> TaskStatus
+Task --> Criterion
+TaskStatusChanged --> TaskStatus : From / To
+
+note right of Plan
+  <b>Progress()</b> = Σ Weight выполненных / Σ Weight всех заданий × 100%
+  Нет заданий → nil (процент не рассчитывается).
+  Пересчитывается при смене статуса и состава заданий.
+  100% не переводит ИПР в «Завершён».
+end note
+
+@enduml

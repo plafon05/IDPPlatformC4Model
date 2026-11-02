@@ -1,0 +1,57 @@
+@startuml IDP_Platform_L0
+
+!include <C4/C4_Context>
+
+title IDP Platform — системный ландшафт корпоративной среды
+
+LAYOUT_LEFT_RIGHT()
+
+skinparam nodesep 45
+skinparam ranksep 70
+
+AddRelTag("interaction", $lineStyle=SolidLine(), $legendText="Взаимодействие систем и пользователей")
+
+Enterprise_Boundary(organization, "Корпоративная среда организации") {
+
+    together {
+        Person(employee, "Сотрудник", "Выполняет задания ИПР и адаптации, проходит оценку и обучение.")
+        Person(manager, "Руководитель", "Оценивает компетенции, назначает ИПР и проверяет результаты.")
+        Person(hrAdmin, "HR-администратор", "Управляет данными сотрудников, настройками развития и кадровым резервом.")
+    }
+
+    System(idpPlatform, "IDP Platform", "Управляет оценкой компетенций, индивидуальными планами развития, адаптацией, карьерными целями и кадровым резервом.")
+
+    System_Ext(hris, "HRIS / Кадровая система", "Ведёт кадровые сведения, должности, подразделения и подчинённость.")
+    System_Ext(lms, "LMS / Обучающая платформа", "Предоставляет курсы и учитывает результаты обучения сотрудников.")
+    System_Ext(iam, "Корпоративный IAM / SSO", "Управляет корпоративными учётными записями и обеспечивает единый вход.")
+    System_Ext(smtp, "Корпоративный SMTP-сервис", "Принимает почтовые сообщения IDP Platform для отправки пользователям.")
+}
+
+' Работа пользователей с IDP Platform
+Rel(employee, idpPlatform, "Просматривает профиль развития и выполняет задания", "HTTPS", $tags="interaction")
+Rel(manager, idpPlatform, "Оценивает компетенции, составляет и назначает ИПР", "HTTPS", $tags="interaction")
+Rel(hrAdmin, idpPlatform, "Администрирует платформу и анализирует результаты", "HTTPS", $tags="interaction")
+
+' Обучение во внешней LMS
+Rel(employee, lms, "Проходит курсы, включённые в задания ИПР", "HTTPS", $tags="interaction")
+
+' Интеграции IDP Platform
+Rel(idpPlatform, hris, "Получает сведения о сотрудниках, должностях и оргструктуре", "HTTPS / REST / JSON", $tags="interaction")
+Rel(idpPlatform, lms, "Получает каталог курсов и результаты прохождения", "HTTPS / REST / JSON", $tags="interaction")
+Rel(idpPlatform, iam, "Использует корпоративную идентификацию", "OpenID Connect / HTTPS", $tags="interaction")
+Rel(idpPlatform, smtp, "Передаёт уведомления и служебные письма", "SMTP / TLS", $tags="interaction")
+
+' Согласованные интеграции корпоративного окружения
+Rel(lms, iam, "Использует корпоративную идентификацию", "OpenID Connect / HTTPS", $tags="interaction")
+Rel(hris, iam, "Передаёт кадровые изменения для создания, обновления и блокировки учётных записей", "HTTPS / REST / JSON", $tags="interaction")
+Rel(hris, lms, "Передаёт сотрудников, подразделения и должности", "HTTPS / REST / JSON", $tags="interaction")
+
+note bottom of idpPlatform
+    Показан вариант организации с подключёнными HRIS, LMS и IAM.
+    Платформа также поддерживает работу без этих интеграций.
+    REST / JSON выбран для интеграционных адаптеров данного варианта.
+end note
+
+SHOW_LEGEND()
+
+@enduml

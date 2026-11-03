@@ -1,0 +1,39 @@
+@startuml IDP_Notification_Landscape_L0
+!include <C4/C4_Container>
+
+title Диаграмма системного ландшафта IDP Platform (L0, индивидуальный фокус: Notification Service)
+LAYOUT_LEFT_RIGHT()
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam nodesep 60
+skinparam ranksep 85
+skinparam shadowing false
+
+Enterprise_Boundary(organization, "Корпоративная среда организации") {
+    together {
+        Person(employee, "Сотрудник", "Получает уведомления о заданиях и обучении")
+        Person(manager, "Руководитель", "Получает уведомления о проверках и контрольных точках")
+        Person(hrAdmin, "HR-администратор", "Получает служебные уведомления и управляет настройками")
+    }
+
+    System_Boundary(idpBoundary, "IDP Platform") {
+        Container_Boundary(idpOtherGroup, "Другие сервисы IDP Platform") {
+            Container(idpOther, "Другие контейнеры платформы", "Группа контейнеров", "API Gateway — маршрутизация запросов и SSE; Development Plan Service, Talent Service и Employee Service — публикация событий через Kafka")
+        }
+        Container(notification, "Notification Service", "Go", "Обработка событий, история, email и in-app уведомления")
+    }
+
+    System_Ext(iam, "Корпоративный IAM / SSO", "Единый вход пользователей")
+    System_Ext(smtp, "Корпоративный SMTP-сервис", "Приём исходящих email")
+}
+
+Rel(employee, idpOther, "Работает с платформой; читает уведомления", "HTTPS")
+Rel(manager, idpOther, "Работает с платформой; читает уведомления", "HTTPS")
+Rel(hrAdmin, idpOther, "Администрирует платформу; читает уведомления", "HTTPS")
+Rel(idpOther, notification, "Публикует события; предоставляет маршрутизацию запросов", "Kafka / TLS; HTTPS / REST / SSE")
+Rel(notification, smtp, "Передаёт email-уведомления", "SMTP / TLS")
+Rel(idpOther, iam, "Использует корпоративный вход", "OIDC / HTTPS")
+
+SHOW_LEGEND()
+@enduml

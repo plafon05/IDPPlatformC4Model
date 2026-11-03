@@ -1,0 +1,65 @@
+@startuml IDP_Notification_Dynamic_Delivery
+!include <C4/C4_Component>
+
+title Динамическая диаграмма IDP Platform \nНазначение ИПР: доставка уведомления сотруднику (Notification Service)
+LAYOUT_LEFT_RIGHT()
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam shadowing false
+skinparam nodesep 60
+skinparam ranksep 90
+skinparam ArrowFontSize 11
+
+Person(manager, "Руководитель", "Назначает ИПР сотруднику")
+Person(employee, "Сотрудник", "Получает уведомление о назначении ИПР")
+System_Ext(smtp, "Корпоративный SMTP", "Приём email-сообщений")
+
+System_Boundary(idp, "IDP Platform") {
+    Container(gateway, "API Gateway", "Go", "Маршрутизирует API и проксирует SSE")
+    Container(development, "Development Plan Service", "Go", "Назначает ИПР и публикует событие")
+    ContainerQueue(events, "Брокер событий", "Apache Kafka", "Передаёт события платформы")
+
+    Container_Boundary(notification, "Notification Service (Go) — индивидуальный фокус") {
+        Component(consumer, "Kafka Event Consumer", "Go", "Читает события из Kafka")
+        Component(app, "Notification Application Service", "Go", "Формирует уведомления с учётом настроек")
+        Component(notifRepo, "Notification Repository", "Go / SQL", "Сохраняет историю уведомлений")
+        Component(jobRepo, "Delivery Job Repository", "Go / SQL", "Хранит задания и статусы доставки")
+        Component(workers, "Delivery Worker Pool", "Go", "Выполняет фоновые задания")
+        Component(delivery, "Delivery Service", "Go", "Send(ctx, id), выбор стратегии")
+        Component(templates, "Template Engine", "Go", "Формирует содержимое уведомления")
+        Component(mail, "SMTP Adapter", "Go", "Отправляет email через SMTP")
+        Component(sse, "SSE Handler", "Go", "Передаёт in-app события")
+    }
+    ContainerDb(db, "Notification DB", "PostgreSQL", "Уведомления, задания, статусы")
+}
+
+Rel(manager, gateway, "1. Назначает ИПР сотруднику", "HTTPS / REST / JSON")
+Rel(gateway, development, "2. Передаёт команду назначения", "HTTPS / REST / JSON")
+Rel(development, events, "3. Публикует событие назначения ИПР", "Kafka protocol / TLS")
+Rel(events, consumer, "4. Передаёт событие подписчику", "Kafka protocol / TLS")
+Rel(consumer, app, "5. Обрабатывает событие и настройки каналов", "In-process / Go call")
+Rel(app, notifRepo, "6. Создаёт запись уведомления", "In-process / Go call")
+Rel(notifRepo, db, "7. Сохраняет уведомление", "PostgreSQL / TCP 5432 / TLS")
+Rel(app, jobRepo, "8. Создаёт задание доставки", "In-process / Go call")
+Rel(jobRepo, db, "9. Сохраняет задание", "PostgreSQL / TCP 5432 / TLS")
+Rel(workers, delivery, "10. Запускает DeliveryService.Send(ctx, id)", "In-process / Go call")
+Rel(delivery, templates, "11. Формирует содержимое сообщения", "In-process / Go call")
+Rel(delivery, mail, "12. Email-стратегия: передаёт письмо адаптеру", "In-process / Go call")
+Rel(mail, smtp, "13. Отправляет письмо (если включён email)", "SMTP / TLS")
+Rel(delivery, sse, "14. In-app-стратегия: публикует событие (если включена)", "In-process / Go channel")
+Rel(sse, gateway, "15. Передаёт in-app уведомление сотрудника", "HTTPS / SSE")
+Rel(gateway, employee, "16. Доставляет уведомление для отображения в интерфейсе", "HTTPS / SSE")
+Rel(delivery, jobRepo, "17. Фиксирует итог попытки доставки", "In-process / Go call")
+Rel(jobRepo, db, "18. Обновляет статус задания", "PostgreSQL / TCP 5432 / TLS")
+
+note bottom of sse
+  Предварительное условие:
+  SSE-подключение сотрудника через API Gateway уже установлено.
+end note
+note bottom of mail
+  Доставка email и in-app выполняется независимо;
+  ошибка отправки email не блокирует in-app уведомление.
+end note
+SHOW_LEGEND()
+@enduml

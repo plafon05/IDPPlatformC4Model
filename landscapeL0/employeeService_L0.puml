@@ -1,0 +1,51 @@
+@startuml IDP_Platform_Employee_L0
+
+!include <C4/C4_Context>
+
+title IDP Platform — Системный ландшафт (Level 0: Локальный фокус — Employee Service)
+
+LAYOUT_LEFT_RIGHT()
+
+skinparam nodesep 50
+skinparam ranksep 75
+skinparam wrapWidth 480
+
+AddRelTag("interaction", $lineStyle=SolidLine(), $legendText="Взаимодействие систем и пользователей")
+
+Enterprise_Boundary(organization, "Корпоративная среда организации") {
+
+    together {
+        Person(hrAdmin, "HR-администратор", "Управляет данными сотрудников, организационной структурой и ролями доступа.")
+        Person(manager, "Руководитель", "Просматривает структуру подчинённости подразделения и сведения о сотрудниках.")
+        Person(employee, "Сотрудник", "Просматривает личный кадровый профиль, структуру коллег и управляет аватаром.")
+    }
+
+    System_Boundary(idpPlatform, "IDP Platform") {
+        System(employeeService, "Employee Service", "Управляет данными сотрудников, организационной структурой, системными ролями и кадровой синхронизацией.\n[Область локального фокуса]")
+    }
+
+    System_Ext(hris, "HRIS / Кадровая система", "Ведёт кадровые сведения, должности, подразделения и подчинённость.")
+    System_Ext(iam, "Корпоративный IAM / SSO", "Управляет корпоративными учётными записями и обеспечивает единый вход.")
+}
+
+' Работа пользователей с платформой (кадровый контекст)
+Rel(hrAdmin, employeeService, "Администрирует сотрудников, оргструктуру и роли", "HTTPS", $tags="interaction")
+Rel(manager, employeeService, "Запрашивает список подчинённых и должностные сведения", "HTTPS", $tags="interaction")
+Rel(employee, employeeService, "Просматривает личный профиль и управляет аватаром", "HTTPS", $tags="interaction")
+
+' Интеграции в корпоративном окружении
+Rel(employeeService, hris, "Получает сведения о сотрудниках, должностях и оргструктуре", "HTTPS / REST / JSON", $tags="interaction")
+Rel(idpPlatform, iam, "Аутентификация пользователей и единый вход (SSO)", "OpenID Connect / HTTPS", $tags="interaction")
+
+' Согласованные интеграции корпоративного окружения
+Rel(hris, iam, "Передаёт кадровые изменения для создания, обновления и блокировки учётных записей", "HTTPS / REST / JSON", $tags="interaction")
+
+note bottom of employeeService
+    Локальный системный ландшафт Employee Service.
+    Показаны пользователи и релевантные внешние системы: HRIS и IAM/SSO.
+    Остальные интеграции представлены в общем ландшафте IDP Platform.
+end note
+
+SHOW_LEGEND()
+
+@enduml

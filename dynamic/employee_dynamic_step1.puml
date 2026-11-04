@@ -1,0 +1,50 @@
+@startuml Employee_Service_Dynamic_Step1
+
+!include <C4/C4_Component>
+
+title Динамическая диаграмма — Получение списка подчинённых и должностей (Employee Service: Шаг 1)
+
+LAYOUT_LEFT_RIGHT()
+
+skinparam nodesep 50
+skinparam ranksep 60
+
+Person(manager, "Руководитель", "Открывает список команды и выбирает сотрудника для оценки и составления ИПР.")
+Container(gateway, "API Gateway", "Go", "Маршрутизирует вызовы, проверяет JWT-токен и передаёт контекст пользователя.")
+
+Container_Boundary(employeeService, "Employee Service (Контейнер участника)") {
+    Component(controller, "Employee API Controller", "Go / HTTP Handler", "Принимает входящий REST-запрос от API Gateway, координирует проверку прав и прикладные вызовы.")
+    Component(roleService, "Role Management Service", "Go Application Service", "Проверяет системные роли и полномочия доступа пользователя к кадровым данным.")
+    Component(orgService, "Organization Structure Service", "Go Application Service", "Реализует операции с подразделениями, оргструктурой и связями подчинённости.")
+    Component(empService, "Employee Management Service", "Go Application Service", "Реализует операции чтения личных карточек, должностей и грейдов сотрудников.")
+    Component(orgRepo, "Organization Repository", "Go / pgx", "Изолирует операции чтения структуры отделов и связей подчинённости.")
+    Component(empRepo, "Employee Repository", "Go / pgx", "Изолирует операции чтения личных карточек, должностей и грейдов.")
+}
+
+ContainerDb(employeeDb, "Employee DB", "PostgreSQL 16", "Реляционная база данных: хранит сотрудников, подразделения, должности и связи подчинённости.")
+
+' Хронологический runtime-сценарий (Шаг 1 сквозного процесса)
+Rel(manager, gateway, "1. Запрос списка подчинённых: GET /api/v1/managers/{id}/subordinates", "HTTPS / JSON")
+Rel(gateway, controller, "2. Проксирование запроса с контекстом пользователя", "HTTPS / REST / JSON")
+
+Rel(controller, roleService, "3. Employee Service проверяет право текущего пользователя на просмотр подчинённых руководителя с указанным {id}", "Go In-Process Call")
+
+' Альтернативный сценарий отказа в доступе (403 Forbidden)
+Rel(controller, gateway, "3а. [При отказе] 403 Forbidden (доступ к чужой команде запрещён)", "HTTPS / JSON")
+Rel(gateway, manager, "3б. [При отказе] 403 Forbidden (ошибка доступа)", "HTTPS / JSON")
+
+' Основной успешный сценарий (выполняется при наличии доступа)
+Rel(controller, orgService, "4. Запрос структуры подчинённости: GetSubordinatesHierarchy(ctx, managerID)", "Go In-Process Call")
+Rel(orgService, orgRepo, "5. FindSubordinateIDs(ctx, managerID)", "Go In-Process Call")
+Rel(orgRepo, employeeDb, "6. SQL SELECT: выборка идентификаторов сотрудников в рамках доступной руководителю подчинённости", "SQL / TCP: 5432")
+
+Rel(controller, empService, "7. Запрос профилей и должностей по списку ID: GetEmployeesBatch(ctx, empIDs)", "Go In-Process Call")
+Rel(empService, empRepo, "8. FindEmployeesBatch(ctx, empIDs)", "Go In-Process Call")
+Rel(empRepo, employeeDb, "9. SQL SELECT: выборка ФИО, должностей и грейдов сотрудников", "SQL / TCP: 5432")
+
+Rel(controller, gateway, "10. Возвращает список сотрудников и должностей для отображения в веб-приложении (200 OK)", "HTTPS / JSON")
+Rel(gateway, manager, "11. Отображение списка сотрудников в веб-приложении руководителя", "HTTPS / JSON")
+
+SHOW_LEGEND()
+
+@enduml

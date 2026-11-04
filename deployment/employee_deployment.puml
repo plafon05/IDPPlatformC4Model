@@ -1,0 +1,77 @@
+@startuml Employee_Service_Deployment
+
+!include <C4/C4_Deployment>
+
+title Диаграмма развертывания — Employee Service (Level 2: Deployment)
+
+skinparam nodesep 45
+skinparam ranksep 60
+
+Deployment_Node(client_env, "Клиентский сегмент", "Корпоративная сеть пользователей") {
+    Deployment_Node(workstation, "Рабочая станция", "Компьютер пользователя (Windows / macOS)") {
+        Deployment_Node(browser, "Веб-браузер", "Chrome / Firefox / Edge") {
+            Container(spa, "Веб-приложение", "React SPA", "Клиентское приложение, выполняемое в браузере пользователя")
+        }
+    }
+}
+
+Deployment_Node(cloud, "Корпоративный ЦОД / Private Cloud", "Виртуализированная инфраструктура организации") {
+
+    Deployment_Node(dmz, "Демилитаризованная зона (DMZ)", "Изолированная подсеть 10.0.0.0/24, доступная через балансировщик") {
+        Deployment_Node(lb_host, "Балансировщик нагрузки", "NGINX (TCP/stream)") {
+            Container(nginx, "Балансировщик нагрузки NGINX", "NGINX stream", "Распределяет входящие TCP-соединения между шлюзами [1 экземпляр]")
+        }
+        Deployment_Node(gw_host, "Кластер шлюзовых серверов", "Ubuntu Linux / Docker Cluster (2 экземпляра)") {
+            Container(gateway, "API Gateway", "Go (Docker Container)", "Единая точка входа, TLS-терминация и валидация JWT-токенов [2 экземпляра / Load Balanced]")
+        }
+    }
+
+    Deployment_Node(app_net, "Приватная сеть приложений", "Изолированная подсеть 10.0.1.0/24") {
+        Deployment_Node(app_host, "Сервер приложений Employee Service", "Ubuntu Linux / Docker Host (2 экземпляра)") {
+            Container(employee_service, "Employee Service", "Go (Docker Container)", "Микросервис управления кадрами, оргструктурой и ролями [2 экземпляра / Replicas]")
+        }
+    }
+
+    Deployment_Node(db_net, "Приватная сеть баз данных", "Изолированная подсеть 10.0.2.0/24") {
+        Deployment_Node(db_master_host, "Сервер БД (Мастер)", "Managed PostgreSQL VM (1 экземпляр)") {
+            ContainerDb(employee_db_master, "Employee DB (Master)", "PostgreSQL 16", "Основная БД: чтение и запись кадровых данных и outbox [1 экземпляр]")
+        }
+        Deployment_Node(db_replica_host, "Сервер БД (Реплика)", "Managed PostgreSQL VM (1 экземпляр)") {
+            ContainerDb(employee_db_replica, "Employee DB (Standby)", "PostgreSQL 16", "Резервная реплика Employee DB [1 экземпляр]")
+        }
+    }
+
+    Deployment_Node(storage_net, "Приватная сеть хранения данных", "Изолированная подсеть 10.0.3.0/24") {
+        Deployment_Node(minio_host, "Кластер объектного хранилища", "MinIO Distributed Cluster (4 экземпляра / узла)") {
+            ContainerDb(object_storage, "Object Storage (MinIO)", "MinIO S3", "S3-совместимое распределённое хранилище аватаров [4 узла / Erasure Code]")
+        }
+    }
+
+    Deployment_Node(broker_net, "Приватная сеть брокера сообщений", "Изолированная подсеть 10.0.4.0/24") {
+        Deployment_Node(kafka_host, "Кластер брокера сообщений", "Apache Kafka Cluster (3 экземпляра / брокера)") {
+            ContainerQueue(kafka, "Брокер событий", "Apache Kafka", "Отказоустойчивая шина кадровых событий платформы [3 брокера]")
+        }
+    }
+}
+
+Deployment_Node(ext_corp, "Внешний корпоративный контур", "Инфраструктура смежных корпоративных систем") {
+    Deployment_Node(hris_host, "Сервер кадрового учёта", "Внутренний ЦОД предприятия (1 кластер / отказоустойчивая пара)") {
+        System_Ext(hris, "HRIS / Кадровая система", "Корпоративный источник кадровых сведений и штатного расписания [1 кластер]")
+    }
+}
+
+' Сетевые связи с портами и протоколами (строго по замечаниям тимлида)
+Rel(spa, nginx, "Запросы пользователей к веб-приложению", "HTTPS / TCP 443")
+Rel(nginx, gateway, "Распределяет соединения между двумя экземплярами", "HTTPS / TCP 443")
+Rel(gateway, employee_service, "Проксирование запросов в защищённый контур", "HTTPS / REST / JSON, порт 8080")
+
+Rel(employee_service, employee_db_master, "Запись и чтение транзакционных данных", "PostgreSQL / TLS, порт 5432")
+Rel(employee_db_master, employee_db_replica, "Потоковая асинхронная репликация", "WAL / TCP: 5432")
+
+Rel(employee_service, object_storage, "Загрузка и чтение аватаров", "S3 API / HTTPS, порт 9000")
+Rel(employee_service, kafka, "Публикация кадровых событий (outbox)", "Kafka protocol / TLS, порт 9092")
+Rel(employee_service, hris, "Импорт кадровых изменений (дельта)", "HTTPS / REST / JSON, порт 443")
+
+SHOW_LEGEND()
+
+@enduml

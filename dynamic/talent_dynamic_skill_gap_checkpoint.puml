@@ -1,0 +1,82 @@
+@startuml Talent_Service_Dynamic_Skill_Gap_Checkpoint
+
+!include <C4/C4_Component>
+
+title Динамическая диаграмма — Сквозной процесс ИПР: участие Talent Service\nSkill Gap и рекомендации, результат обучения из LMS, уровень компетенции по контрольной точке
+
+LAYOUT_TOP_DOWN()
+
+skinparam nodesep 40
+skinparam ranksep 70
+skinparam wrapWidth 300
+
+AddRelTag("async", $textColor="#7B5EA7", $lineColor="#7B5EA7", $lineStyle=DashedLine(), $legendText="Асинхронный обмен через Kafka и фоновая синхронизация")
+
+Person(manager, "Руководитель", "Открывает профиль развития сотрудника и видит дефициты компетенций и рекомендованное обучение.")
+Container(gateway, "API Gateway", "Go", "Проверяет JWT, маршрутизирует запросы, терминирует TLS.")
+Container(devPlan, "Development Plan Service", "Go", "Проверяет контрольные точки ИПР и публикует событие достижения (вне области фокуса).")
+System_Ext(lms, "LMS / Обучающая платформа", "Каталог курсов и результаты прохождения.")
+ContainerQueue(kafka, "Брокер событий", "Apache Kafka", "Шина событий платформы.")
+
+Container_Boundary(talentService, "Talent Service (Контейнер участника)") {
+    Component(restApi, "REST API Handlers", "Go, HTTP router", "Принимает запросы от API Gateway, проверяет право просмотра, формирует ответы.")
+    Component(profileSvc, "Talent Profile Service", "Go package", "Сборка Talent Profile, расчёт Skill Gap и рекомендаций.")
+    Component(gapEngine, "Skill Gap & Recommendation Engine", "Go package", "Чистые функции: Calculate и Recommend, без ввода-вывода.")
+    Component(learningSvc, "Learning Service", "Go package", "Каталог обучения, синхронизация курсов и результатов из LMS.")
+    Component(lmsClient, "LMS Client", "Go, HTTP client", "Адаптер REST API LMS: таймауты, повторы, circuit breaker.")
+    Component(competencySvc, "Competency Service", "Go package", "Уровни компетенций сотрудника и основание их изменения.")
+    Component(eventConsumer, "Event Consumer", "Go, Kafka consumer", "Читает события, проверяет схему сообщений. Без бизнес-логики.")
+    Component(repository, "Talent Repository", "Go, pgx", "Репозитории, транзакции, outbox.")
+    Component(outboxRelay, "Outbox Relay", "Go, фоновый воркер", "Публикует события outbox в Kafka (at-least-once).")
+}
+
+ContainerDb(talentDb, "Talent DB", "PostgreSQL 16", "Уровни компетенций, профили должностей, каталог курсов, результаты обучения, outbox.")
+
+' ---------- Фаза A. Профиль развития: Skill Gap и рекомендации (шаги 2-3 процесса) ----------
+Rel(manager, gateway, "1. [П2] Открывает профиль развития: запрос Skill Gap сотрудника (id, profile_id, version)", "HTTPS / REST / JSON, Bearer JWT")
+Rel(gateway, restApi, "2. Проксирует запрос с контекстом пользователя", "HTTPS / REST / JSON, порт 8080")
+Rel(restApi, profileSvc, "3. SkillGap(ctx, employeeID, profileID, version)", "Go In-Process Call")
+Rel(profileSvc, repository, "4. GetLevelRecords, GetProfile, ListCourses (каталог LMS)", "Go In-Process Call")
+Rel(repository, talentDb, "5. SELECT: уровни, требования должности, курсы", "PostgreSQL / TLS, порт 5432")
+Rel(profileSvc, gapEngine, "6. [П3] Calculate(profile, records): дефициты; Recommend(report, courses, limit): курсы", "Go In-Process Call")
+Rel(restApi, gateway, "7. 200 OK: отчёт Skill Gap и рекомендованные курсы", "HTTPS / JSON")
+Rel(gateway, manager, "8. Показывает дефициты и рекомендованное обучение", "HTTPS / JSON")
+
+' ---------- Фаза B. Результат обучения из LMS (шаг 8 процесса) ----------
+Rel(learningSvc, lmsClient, "9. [П8] SyncLearningResults(ctx) → GetCompletions(ctx, since)", "Go In-Process Call", $tags="async")
+Rel(lmsClient, lms, "10. Запрашивает результаты прохождения курсов", "HTTPS / REST / JSON, порт 443", $tags="async")
+Rel(learningSvc, repository, "11. SaveLearningRecord(ctx, rec) + запись в outbox", "Go In-Process Call")
+Rel(repository, talentDb, "12. INSERT результат обучения + INSERT outbox (одна транзакция)", "PostgreSQL / TLS, порт 5432")
+Rel(outboxRelay, repository, "13. FetchUnsent(ctx, limit) / MarkSent(ctx, ids)", "Go In-Process Call", $tags="async")
+Rel(outboxRelay, kafka, "14. Публикует LearningResultRecorded", "Kafka protocol / TLS, порт 9092", $tags="async")
+
+' ---------- Фаза C. Уровень компетенции по контрольной точке (шаг 13 процесса) ----------
+Rel(devPlan, kafka, "15. [П12] Публикует CheckpointReached с данными правила изменения уровня", "Kafka protocol / TLS, порт 9092", $tags="async")
+Rel(kafka, eventConsumer, "16. [П13] Доставляет событие подписчику", "Kafka protocol / TLS, порт 9092", $tags="async")
+Rel(eventConsumer, competencySvc, "17. ApplyRuleLevel(ctx, evt): идемпотентно по id события", "Go In-Process Call")
+Rel(competencySvc, repository, "18. SaveLevelRecord(ctx, rec): уровень, final, idp_rule, основание", "Go In-Process Call")
+Rel(repository, talentDb, "19. INSERT employee_competency_levels (status = final, method = idp_rule, basis)", "PostgreSQL / TLS, порт 5432")
+
+note left of restApi
+  [Пn] — номер шага общего процесса ИПР.
+  Предусловие шага 3: каталог курсов уже
+  синхронизирован из LMS (Learning Service
+  по расписанию) и лежит в Talent DB.
+end note
+
+note right of competencySvc
+  Шаг 14 процесса: при следующем открытии профиля
+  шаги 1–8 выполняются заново, GetLevelRecords
+  возвращает новый final-уровень, Skill Gap
+  пересчитывается по обновлённому уровню.
+end note
+
+note bottom of devPlan
+  Шаги 9–12 процесса (приём результата,
+  проверка, контрольная точка) выполняет
+  Development Plan Service, вне фокуса.
+end note
+
+SHOW_LEGEND()
+
+@enduml

@@ -1,0 +1,69 @@
+@startuml IDP_Notification_Deployment_L2
+!include <C4/C4_Deployment>
+
+title Диаграмма развертывания IDP Platform - Notification Service(L2)
+LAYOUT_TOP_DOWN()
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Arial
+skinparam shadowing false
+skinparam nodesep 105
+skinparam ranksep 135
+skinparam ArrowFontSize 11
+skinparam ArrowThickness 1.2
+skinparam defaultTextAlignment center
+skinparam linetype polyline
+
+' Пользовательский клиент: отдельные персоны на диаграмме развёртывания не нужны.
+Deployment_Node(clientSegment, "Клиентский сегмент", "Пользовательская инфраструктура") {
+    Deployment_Node(workstation, "Рабочая станция", "Компьютер пользователя") {
+        Deployment_Node(browser, "Веб-браузер", "Chrome / Firefox / Edge") {
+            Container(web, "Веб-приложение", "React SPA / TypeScript", "Интерфейс уведомлений")
+        }
+    }
+}
+
+Deployment_Node(infra, "Корпоративная инфраструктура IDP Platform", "Корпоративный ЦОД / Private Cloud") {
+
+    Deployment_Node(dmz, "Демилитаризованная зона (DMZ)", "Сегмент доступа") {
+        Deployment_Node(lbHost, "Балансировщик нагрузки", "NGINX (TCP/stream)") {
+            Container(nginx, "NGINX", "NGINX stream", "Балансировка TLS-соединений")
+        }
+        Deployment_Node(gatewayHost, "Кластер шлюзовых серверов", "Linux / Docker Cluster — 2 экземпляра") {
+            Container(gateway, "API Gateway", "Go / Docker", "REST API, TLS-терминация и SSE; 2 экземпляра")
+        }
+    }
+
+    Deployment_Node(appNet, "Приватная сеть приложений", "Внутренний сегмент") {
+        Deployment_Node(appHost, "Сервер приложений Notification Server", "Linux") {
+            Container(notification, "Notification Service", "Go", "Приём событий, история и доставка уведомлений")
+        }
+    }
+
+    Deployment_Node(brokerNet, "Приватная сеть брокера сообщений", "Внутренний сегмент") {
+        Deployment_Node(kafkaHost, "Кластер брокера сообщений", "Apache Kafka Cluster / 3 брокера") {
+            ContainerQueue(events, "Apache Kafka Cluster", "Apache Kafka", "События сервисов IDP Platform")
+        }
+    }
+
+    Deployment_Node(dbNet, "Приватная сеть баз данных", "Внутренний сегмент") {
+        Deployment_Node(dbHost, "Выделенный сервер СУБД", "PostgreSQL") {
+            ContainerDb(db, "Notification DB", "PostgreSQL", "Уведомления, задания и статусы доставки")
+        }
+    }
+}
+
+Deployment_Node(externalCorp, "Внешний корпоративный контур", "Инфраструктура смежных корпоративных систем") {
+    Deployment_Node(mailHost, "Корпоративный почтовый сервер", "Почтовая инфраструктура") {
+        Container_Ext(smtp, "Корпоративный SMTP-сервис", "SMTP / TLS", "Приём исходящих писем")
+    }
+}
+
+Rel(web, nginx, "Запросы к платформе", "HTTPS / TCP 443")
+Rel(nginx, gateway, "Распределяет соединения\nмежду двумя экземплярами", "HTTPS / TCP 443")
+Rel(gateway, notification, "REST API и проксирование SSE", "HTTPS / REST / SSE")
+Rel(notification, events, "Получает события", "Kafka protocol / TLS")
+Rel(notification, db, "Читает и записывает", "PostgreSQL / TCP 5432")
+Rel(notification, smtp, "Отправляет email", "SMTP / TLS")
+
+@enduml

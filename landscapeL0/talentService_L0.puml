@@ -1,0 +1,69 @@
+@startuml IDP_Platform_Talent_L0
+
+!include <C4/C4_Context>
+
+title IDP Platform — Системный ландшафт (Level 0: Локальный фокус — Talent Service)
+
+LAYOUT_TOP_DOWN()
+
+skinparam nodesep 40
+skinparam ranksep 90
+skinparam wrapWidth 480
+
+AddRelTag("interaction", $lineStyle=SolidLine(), $legendText="Взаимодействие систем и пользователей")
+AddRelTag("finance", $textColor="#B8860B", $lineColor="#B8860B", $lineStyle=DashedLine(), $legendText="Внешняя финансовая система (платные курсы, вне основного сценария ИПР)")
+AddElementTag("focus", $bgColor="#1168BD", $fontColor="#FFFFFF", $borderColor="#0B4884", $legendText="Область локального фокуса")
+
+Enterprise_Boundary(organization, "Корпоративная среда организации") {
+
+    together {
+        Person(employee, "Сотрудник", "Выполняет задания ИПР, проходит курсы в LMS, получает уведомления.")
+        Person(manager, "Руководитель", "Открывает профиль развития сотрудника, оценивает дефициты компетенций, назначает ИПР и проверяет результаты.")
+        Person(hrAdmin, "HR-администратор", "Ведёт карьерные модели, справочник компетенций и кадровый резерв.")
+    }
+
+    System_Boundary(idpPlatform, "IDP Platform") {
+        System(talentService, "Talent Service", "Компетенции, карьерные модели, обучение, кадровый резерв. Рассчитывает Skill Gap и рекомендации по каталогу LMS, принимает результаты обучения, фиксирует уровень компетенции по контрольной точке ИПР.\n[Область локального фокуса]", $tags="focus")
+        System(idpOther, "Остальные контейнеры платформы", "Web Application, API Gateway, Employee Service, Development Plan Service, Notification Service, брокер событий Kafka.")
+    }
+
+    System_Ext(lms, "LMS / Обучающая платформа", "Каталог курсов, прохождение курсов сотрудниками и результаты обучения.")
+    System_Ext(iam, "Корпоративный IAM / SSO", "Корпоративные учётные записи, единый вход, выдача токенов.")
+    System_Ext(hris, "HRIS / Кадровая система", "Кадровые сведения, должности, подразделения и подчинённость.")
+}
+
+Boundary(externalOrgs, "Внешний ИТ-контур (за пределами организации)") {
+    System_Ext(payment, "Платёжный шлюз / банк", "Принимает оплату платных курсов, ведёт статусы платежей и уведомляет о результате.")
+}
+
+' Работа пользователей с платформой и LMS
+Rel(manager, idpOther, "Открывает профиль развития, видит дефициты и рекомендации, назначает ИПР", "HTTPS", $tags="interaction")
+Rel(employee, idpOther, "Выполняет задания ИПР, получает уведомления", "HTTPS", $tags="interaction")
+Rel(hrAdmin, idpOther, "Ведёт карьерные модели и кадровый резерв", "HTTPS", $tags="interaction")
+Rel(employee, lms, "Проходит курс, включённый в задание ИПР", "HTTPS", $tags="interaction")
+Rel(idpOther, talentService, "Маршрутизирует запросы профиля развития, компетенций и обучения", "HTTPS / REST / JSON", $tags="interaction")
+Rel(talentService, idpOther, "Публикует событие результата обучения; получает событие достижения контрольной точки", "Kafka protocol / TLS", $tags="interaction")
+
+' Интеграции Talent Service с корпоративными системами
+Rel(talentService, lms, "Получает каталог курсов и результаты прохождения", "HTTPS / REST / JSON", $tags="interaction")
+Rel(idpOther, iam, "Аутентификация пользователей, получение ключей проверки токенов", "OpenID Connect / OAuth 2.0 / HTTPS", $tags="interaction")
+Rel(idpOther, hris, "Синхронизирует сотрудников и оргструктуру (Employee Service)", "HTTPS / REST / JSON", $tags="interaction")
+
+' Внешняя финансовая система (опциональное расширение: платные курсы)
+Rel(talentService, payment, "Создаёт платёж за платный курс и запрашивает его статус", "HTTPS / REST / JSON, OAuth 2.0 Client Credentials", $tags="finance")
+Rel(payment, idpOther, "Уведомляет о статусе платежа (webhook, подпись HMAC-SHA256)", "HTTPS / JSON", $tags="finance")
+
+' Согласованные интеграции корпоративного окружения (из общего ландшафта)
+Rel(lms, iam, "Использует корпоративную идентификацию", "OpenID Connect / HTTPS", $tags="interaction")
+Rel(hris, iam, "Передаёт кадровые изменения для управления учётными записями", "HTTPS / REST / JSON", $tags="interaction")
+Rel(hris, lms, "Передаёт сотрудников, подразделения и должности", "HTTPS / REST / JSON", $tags="interaction")
+
+note bottom of talentService
+    Локальный ландшафт Talent Service на основе общего ландшафта IDP Platform.
+    Платёжный шлюз добавлен как внешняя финансовая система: он нужен только для платных курсов
+    и в основном сценарии ИПР не участвует. SMTP опущен: он относится к Notification Service.
+end note
+
+SHOW_LEGEND()
+
+@enduml

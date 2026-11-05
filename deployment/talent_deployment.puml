@@ -1,0 +1,87 @@
+@startuml Talent_Service_Deployment
+
+!include <C4/C4_Deployment>
+
+title Диаграмма развертывания — Talent Service (Level 2: Deployment)
+
+LAYOUT_TOP_DOWN()
+
+skinparam nodesep 45
+skinparam ranksep 70
+skinparam wrapWidth 300
+
+AddRelTag("finance", $textColor="#B8860B", $lineColor="#B8860B", $lineStyle=DashedLine(), $legendText="Платёжный шлюз (платные курсы, опционально)")
+
+Deployment_Node(client_env, "Клиентский сегмент", "Корпоративная сеть пользователей") {
+    Deployment_Node(workstation, "Рабочая станция", "Компьютер пользователя (Windows / macOS)") {
+        Deployment_Node(browser, "Веб-браузер", "Chrome / Firefox / Edge") {
+            Container(spa, "Веб-приложение", "React SPA", "Клиентское приложение, выполняемое в браузере пользователя")
+        }
+    }
+}
+
+Deployment_Node(cloud, "Корпоративный ЦОД / Private Cloud", "Виртуализированная инфраструктура организации") {
+
+    Deployment_Node(dmz, "Демилитаризованная зона (DMZ)", "Изолированная подсеть 10.0.0.0/24, доступная через балансировщик") {
+        Deployment_Node(lb_host, "Балансировщик нагрузки", "NGINX (TCP/stream)") {
+            Container(nginx, "Балансировщик нагрузки NGINX", "NGINX stream", "Принимает пользовательский трафик и (опционально) webhook платёжного шлюза [1 экземпляр]")
+        }
+        Deployment_Node(gw_host, "Кластер шлюзовых серверов", "Ubuntu Linux / Docker Cluster (2 экземпляра)") {
+            Container(gateway, "API Gateway", "Go (Docker Container)", "TLS-терминация, валидация JWT, маршрутизация запросов и webhook [2 экземпляра / Load Balanced]")
+        }
+        Deployment_Node(egress_host, "Исходящий шлюз", "NAT / Egress-firewall (фиксированный внешний IP)") {
+            Container(egress, "NAT-шлюз", "Firewall / SNAT", "Единственная точка выхода в интернет; внешний IP добавлен в allowlist платёжного шлюза [1 экземпляр]")
+        }
+    }
+
+    Deployment_Node(app_net, "Приватная сеть приложений", "Изолированная подсеть 10.0.1.0/24") {
+        Deployment_Node(app_host, "Сервер приложений Talent Service", "Ubuntu Linux / Docker Host (2 экземпляра)") {
+            Container(talent_service, "Talent Service", "Go (Docker Container)", "Компетенции, карьера, обучение, резерв, Skill Gap, результаты обучения, уровни по контрольным точкам [2 экземпляра / Replicas]")
+        }
+    }
+
+    Deployment_Node(db_net, "Приватная сеть баз данных", "Изолированная подсеть 10.0.2.0/24") {
+        Deployment_Node(db_master_host, "Сервер БД (Мастер)", "Managed PostgreSQL VM (1 экземпляр)") {
+            ContainerDb(talent_db_master, "Talent DB (Master)", "PostgreSQL 16", "Основная БД: чтение и запись данных, платежей и outbox [1 экземпляр]")
+        }
+        Deployment_Node(db_replica_host, "Сервер БД (Реплика)", "Managed PostgreSQL VM (1 экземпляр)") {
+            ContainerDb(talent_db_replica, "Talent DB (Standby)", "PostgreSQL 16", "Резервная реплика Talent DB [1 экземпляр]")
+        }
+    }
+
+    Deployment_Node(broker_net, "Приватная сеть брокера сообщений", "Изолированная подсеть 10.0.4.0/24") {
+        Deployment_Node(kafka_host, "Кластер брокера сообщений", "Apache Kafka Cluster (3 экземпляра / брокера)") {
+            ContainerQueue(kafka, "Брокер событий", "Apache Kafka", "Отказоустойчивая шина событий платформы [3 брокера]")
+        }
+    }
+}
+
+Deployment_Node(ext_corp, "Внешний корпоративный контур", "Инфраструктура смежных корпоративных систем") {
+    Deployment_Node(lms_host, "Сервер обучающей платформы", "Внутренний ЦОД предприятия (1 кластер)") {
+        System_Ext(lms, "LMS / Обучающая платформа", "Каталог курсов и результаты обучения [1 кластер]")
+    }
+}
+
+Deployment_Node(ext_world, "Внешний ИТ-контур", "Инфраструктура сторонней организации (интернет)") {
+    Deployment_Node(pay_host, "Платформа платёжного провайдера", "Облако провайдера / банка") {
+        System_Ext(payment, "Платёжный шлюз / банк", "Приём оплаты и webhook-уведомления о статусе платежа")
+    }
+}
+
+' Сетевые связи с портами и протоколами
+Rel(spa, nginx, "Запросы пользователей к веб-приложению", "HTTPS / TCP 443")
+Rel(payment, nginx, "Webhook статуса платежа (подпись HMAC-SHA256)", "HTTPS / TCP 443", $tags="finance")
+Rel(nginx, gateway, "Распределяет соединения между двумя экземплярами", "HTTPS / TCP 443")
+Rel(gateway, talent_service, "Проксирование запросов (и webhook платежей) в защищённый контур", "HTTPS / REST / JSON, порт 8080")
+
+Rel(talent_service, talent_db_master, "Запись и чтение транзакционных данных", "PostgreSQL / TLS, порт 5432")
+Rel(talent_db_master, talent_db_replica, "Потоковая асинхронная репликация", "WAL / TCP 5432")
+
+Rel(talent_service, kafka, "Публикация результатов обучения (outbox); чтение событий контрольных точек", "Kafka protocol / TLS, порт 9092")
+Rel(talent_service, lms, "Синхронизация каталога курсов и результатов обучения", "HTTPS / REST / JSON, порт 443")
+Rel(talent_service, egress, "Исходящие запросы к платёжному шлюзу", "HTTPS / TCP 443")
+Rel(egress, payment, "Создание платежа и запрос статуса (OAuth 2.0 Client Credentials)", "HTTPS / REST / JSON, порт 443", $tags="finance")
+
+SHOW_LEGEND()
+
+@enduml

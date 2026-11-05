@@ -1,0 +1,66 @@
+@startuml IDP_Platform_DevelopmentPlan_L0
+
+!include <C4/C4_Context>
+
+title IDP Platform — Системный ландшафт (Level 0: Локальный фокус — Development Plan Service)
+
+LAYOUT_LEFT_RIGHT()
+
+skinparam nodesep 50
+skinparam ranksep 75
+skinparam wrapWidth 480
+
+AddRelTag("interaction", $lineStyle=SolidLine(), $legendText="Взаимодействие систем и пользователей")
+AddRelTag("events", $lineStyle=DashedLine(), $legendText="Асинхронные события платформы")
+
+Enterprise_Boundary(organization, "Корпоративная среда организации") {
+
+    together {
+        Person(employee, "Сотрудник", "Выполняет задания ИПР и адаптации, прикладывает результаты и проходит курсы.")
+        Person(manager, "Руководитель", "Составляет и назначает ИПР, проверяет результаты заданий и завершает план.")
+        Person(hrAdmin, "HR-администратор", "Ведёт общую библиотеку ПР и шаблоны адаптации.")
+    }
+
+    System_Boundary(idpPlatform, "IDP Platform") {
+        System(developmentService, "Development Plan Service", "Управляет библиотекой ПР, ИПР, заданиями, адаптацией и контролем сроков; рассчитывает взвешенный прогресс.\n[Область локального фокуса]")
+        System(employeeService, "Employee Service", "Сотрудники и оргструктура; публикует кадровые события.")
+        System(talentService, "Talent Service", "Компетенции, тесты и интеграция с LMS; публикует результаты курсов и тестов.")
+        System(notificationService, "Notification Service", "Уведомления в приложении и по email.")
+    }
+
+    System_Ext(hris, "HRIS / Кадровая система", "Ведёт кадровые сведения, должности, подразделения и подчинённость.")
+    System_Ext(lms, "LMS / Обучающая платформа", "Предоставляет курсы и учитывает результаты обучения сотрудников.")
+    System_Ext(iam, "Корпоративный IAM / SSO", "Управляет корпоративными учётными записями и обеспечивает единый вход.")
+    System_Ext(smtp, "Корпоративный SMTP-сервис", "Принимает почтовые сообщения IDP Platform для отправки пользователям.")
+}
+
+' Работа пользователей с ИПР (через веб-приложение и API Gateway)
+Rel(employee, developmentService, "Выполняет задания ИПР и отправляет результаты", "HTTPS", $tags="interaction")
+Rel(manager, developmentService, "Составляет, назначает ИПР и проверяет задания", "HTTPS", $tags="interaction")
+Rel(hrAdmin, developmentService, "Ведёт библиотеку ПР и шаблоны адаптации", "HTTPS", $tags="interaction")
+
+' Встраивание Development Plan Service через события смежных сервисов
+Rel_L(employeeService, hris, "Получает сведения о сотрудниках, должностях и оргструктуре", "HTTPS / REST / JSON", $tags="interaction")
+Rel(employeeService, developmentService, "Приём, перевод, смена руководителя → план адаптации, переназначение ИПР", "Kafka / TLS", $tags="events")
+
+Rel_L(talentService, lms, "Получает каталог курсов и результаты прохождения", "HTTPS / REST / JSON", $tags="interaction")
+Rel(talentService, developmentService, "Результаты курсов LMS и тестов, изменения компетенций", "Kafka / TLS", $tags="events")
+
+Rel(developmentService, notificationService, "Назначение ИПР, задания на проверке, сроки и просрочки", "Kafka / TLS", $tags="events")
+Rel_R(notificationService, smtp, "Передаёт email-уведомления", "SMTP / TLS", $tags="interaction")
+
+' Корпоративный вход
+Rel_D(idpPlatform, iam, "Аутентификация пользователей и единый вход (SSO)", "OpenID Connect / HTTPS", $tags="interaction")
+
+note as scopeNote
+    Локальный системный ландшафт Development Plan Service.
+    Сервис не обращается к внешним системам напрямую:
+    кадровые данные приходят от Employee Service (HRIS),
+    результаты курсов — от Talent Service (LMS),
+    email отправляет Notification Service (SMTP).
+    Остальные интеграции представлены в общем ландшафте IDP Platform.
+end note
+
+SHOW_LEGEND()
+
+@enduml

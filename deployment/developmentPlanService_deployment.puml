@@ -1,0 +1,80 @@
+@startuml Development_Plan_Service_Deployment
+
+!include <C4/C4_Deployment>
+
+title Диаграмма развертывания — Development Plan Service (Level 2: Deployment)
+
+skinparam nodesep 45
+skinparam ranksep 60
+
+Deployment_Node(client_env, "Клиентский сегмент", "Корпоративная сеть пользователей") {
+    Deployment_Node(workstation, "Рабочая станция", "Компьютер пользователя (Windows / macOS)") {
+        Deployment_Node(browser, "Веб-браузер", "Chrome / Firefox / Edge") {
+            Container(spa, "Веб-приложение", "React SPA", "Клиентское приложение, выполняемое в браузере пользователя")
+        }
+    }
+}
+
+Deployment_Node(cloud, "Корпоративный ЦОД / Private Cloud", "Виртуализированная инфраструктура организации") {
+
+    Deployment_Node(dmz, "Демилитаризованная зона (DMZ)", "Изолированная подсеть 10.0.0.0/24, доступная через балансировщик") {
+        Deployment_Node(lb_host, "Балансировщик нагрузки", "NGINX (TCP/stream)") {
+            Container(nginx, "Балансировщик нагрузки NGINX", "NGINX stream", "Распределяет входящие TCP-соединения между шлюзами [1 экземпляр]")
+        }
+        Deployment_Node(gw_host, "Кластер шлюзовых серверов", "Ubuntu Linux / Docker Cluster (2 экземпляра)") {
+            Container(gateway, "API Gateway", "Go (Docker Container)", "Единая точка входа, TLS-терминация и валидация JWT-токенов [2 экземпляра / Load Balanced]")
+        }
+    }
+
+    Deployment_Node(app_net, "Приватная сеть приложений", "Изолированная подсеть 10.0.1.0/24") {
+        Deployment_Node(app_host, "Сервер приложений Development Plan Service", "Ubuntu Linux / Docker Host (2 экземпляра)") {
+            Container(development_service, "Development Plan Service", "Go (Docker Container)", "ИПР, задания, адаптация, напоминания и публикация outbox [2 экземпляра / Replicas, одна группа потребителей Kafka]")
+        }
+    }
+
+    Deployment_Node(db_net, "Приватная сеть баз данных", "Изолированная подсеть 10.0.2.0/24") {
+        Deployment_Node(db_master_host, "Сервер БД (Мастер)", "Managed PostgreSQL VM (1 экземпляр)") {
+            ContainerDb(development_db_master, "Development Plan DB (Master)", "PostgreSQL 16", "Основная БД: ИПР, задания, оценки, шаблоны, проекции и outbox [1 экземпляр]")
+        }
+        Deployment_Node(db_replica_host, "Сервер БД (Реплика)", "Managed PostgreSQL VM (1 экземпляр)") {
+            ContainerDb(development_db_replica, "Development Plan DB (Standby)", "PostgreSQL 16", "Горячий резерв Development Plan DB [1 экземпляр]")
+        }
+    }
+
+    Deployment_Node(storage_net, "Приватная сеть хранения данных", "Изолированная подсеть 10.0.3.0/24") {
+        Deployment_Node(minio_host, "Кластер объектного хранилища", "MinIO Distributed Cluster (4 экземпляра / узла)") {
+            ContainerDb(object_storage, "Object Storage (MinIO)", "MinIO S3", "S3-совместимое хранилище вложений к заданиям ИПР [4 узла / Erasure Code]")
+        }
+    }
+
+    Deployment_Node(broker_net, "Приватная сеть брокера сообщений", "Изолированная подсеть 10.0.4.0/24") {
+        Deployment_Node(kafka_host, "Кластер брокера сообщений", "Apache Kafka Cluster (3 экземпляра / брокера)") {
+            ContainerQueue(kafka, "Брокер событий", "Apache Kafka", "Топик development.events и подписки на кадровые события и результаты Talent Service [3 брокера, replication factor 3]")
+        }
+    }
+}
+
+' Сетевые связи с портами и протоколами
+Rel(spa, nginx, "Запросы пользователей к веб-приложению", "HTTPS / TCP 443")
+Rel(nginx, gateway, "Распределяет соединения между двумя экземплярами", "HTTPS / TCP 443")
+Rel(gateway, development_service, "Проксирование запросов ИПР и адаптации", "HTTPS / REST / JSON, порт 8080")
+
+Rel(development_service, development_db_master, "Запись и чтение данных и outbox", "PostgreSQL / TLS, порт 5432")
+Rel(development_db_master, development_db_replica, "Потоковая асинхронная репликация", "WAL / TCP: 5432")
+
+Rel(development_service, object_storage, "Загрузка и чтение вложений к заданиям", "S3 API / HTTPS, порт 9000")
+Rel(development_service, kafka, "Публикация событий ИПР (outbox) и чтение событий других сервисов", "Kafka protocol / TLS, порт 9092")
+
+note right of development_service
+    Два экземпляра работают одновременно:
+    • REST-запросы распределяет API Gateway;
+    • партиции Kafka делятся внутри группы
+      потребителей development-plan-service;
+    • фоновые циклы outbox и напоминаний
+      не дублируются: строки блокируются
+      через FOR UPDATE SKIP LOCKED.
+end note
+
+SHOW_LEGEND()
+
+@enduml

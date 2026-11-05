@@ -1,0 +1,71 @@
+@startuml Development_Plan_Service_Dynamic
+
+!include <C4/C4_Component>
+
+title Динамическая диаграмма — Отправка результата задания ИПР на проверку и пересчёт прогресса (Development Plan Service)
+
+LAYOUT_LEFT_RIGHT()
+
+skinparam nodesep 50
+skinparam ranksep 60
+
+Person(employee, "Сотрудник", "Отмечает выполнение задания ИПР «Практика» и прикладывает результат.")
+Container(gateway, "API Gateway", "Go", "Маршрутизирует вызовы, проверяет JWT-токен и передаёт контекст пользователя.")
+
+Container_Boundary(developmentService, "Development Plan Service (Контейнер участника)") {
+    Component(controller, "Development API Controller", "Go / HTTP Handler", "Принимает REST-запрос, формирует SubmitResultCommand с Actor из токена.")
+    Component(planService, "Development Plan Service", "Go Application Service", "SubmitResult: права, выбор стратегии по критерию задания, переход статуса, взвешенный прогресс.")
+    Component(planRepo, "Plan Repository", "Go / pgx", "Читает ИПР с заданиями; сохраняет план и событие outbox в одной транзакции.")
+    Component(outboxWorker, "Outbox Publishing Worker", "Go Background Worker", "По таймеру запускает цикл публикации событий outbox.")
+    Component(outboxService, "Outbox Publication Service", "Go Application Service", "PublishBatch: получает pending-события, публикует и фиксирует результат.")
+    Component(outboxRepo, "Outbox Repository", "Go / pgx", "Выдаёт pending-события и отмечает отправленные.")
+    Component(producer, "Kafka Producer", "Go / Kafka Client", "Публикует события ИПР в Apache Kafka.")
+}
+
+ContainerDb(developmentDb, "Development Plan DB", "PostgreSQL 16", "Хранит ИПР, задания, версии планов и outbox событий развития.")
+ContainerQueue(kafka, "Брокер событий", "Apache Kafka", "Топик development.events, ключ сообщения — ID плана.")
+Container(notification, "Notification Service", "Go", "Уведомляет руководителя о задании на проверке.")
+
+' Синхронная часть: фиксация результата
+Rel(employee, gateway, "1. Отправка результата: POST /api/v1/plans/{planId}/tasks/{taskId}/result", "HTTPS / JSON")
+Rel(gateway, controller, "2. Проксирование запроса с контекстом пользователя", "HTTPS / REST / JSON")
+Rel(controller, planService, "3. SubmitResult(ctx, SubmitResultCommand{Source: employee})", "Go In-Process Call")
+Rel(planService, planRepo, "4. Get(ctx, planID)", "Go In-Process Call")
+Rel(planRepo, developmentDb, "5. SQL SELECT: ИПР, актуальный состав заданий и версия плана", "SQL / TCP: 5432")
+
+' Альтернативный сценарий отказа
+Rel(controller, gateway, "5а. [Чужой ИПР / план не «выполняется»] 403 Forbidden / 409 Conflict", "HTTPS / JSON")
+Rel(gateway, employee, "5б. [При отказе] Сообщение об ошибке", "HTTPS / JSON")
+
+' Основной сценарий
+Rel(planService, planRepo, "6. Save(ctx, plan, expectedVersion, [TaskStatusChanged])", "Go In-Process Call")
+Rel(planRepo, developmentDb, "7. Транзакция: UPDATE задания и плана WHERE version = expected; INSERT outbox", "SQL / TCP: 5432")
+Rel(controller, gateway, "8. 200 OK: статус задания on_review, прогресс ИПР", "HTTPS / JSON")
+Rel(gateway, employee, "9. Отображение статуса «На проверке» и прогресса", "HTTPS / JSON")
+
+' Асинхронная часть: публикация события
+Rel(outboxWorker, outboxService, "10. PublishBatch(ctx, limit) по таймеру", "Go In-Process Call")
+Rel(outboxService, outboxRepo, "11. FetchPending(ctx, limit)", "Go In-Process Call")
+Rel(outboxRepo, developmentDb, "12. SQL SELECT ... FOR UPDATE SKIP LOCKED", "SQL / TCP: 5432")
+Rel(outboxService, producer, "13. Publish(ctx, TaskStatusChanged)", "Go In-Process Call")
+Rel(producer, kafka, "14. Запись в топик development.events (key = planID)", "Kafka protocol / TLS: 9092")
+Rel(outboxService, outboxRepo, "15. MarkSent(ctx, ids) после подтверждения брокера", "Go In-Process Call")
+Rel(outboxRepo, developmentDb, "16. SQL UPDATE outbox SET sent_at", "SQL / TCP: 5432")
+Rel(kafka, notification, "17. Доставка события подписчику: уведомить руководителя", "Kafka protocol / TLS: 9092")
+
+note bottom of planService
+    Внутри компонента (шаги 4–6, см. L4):
+    StrategyRegistry.Resolve(task.Criterion) → EmployeeMarkStrategy.IsMet()
+    → Task.Accept(): RequiresReview → on_review
+    → Plan.Progress() — прогресс не растёт до подтверждения руководителем.
+end note
+
+note bottom of producer
+    Доставка at-least-once: при сбое до MarkSent
+    событие будет опубликовано повторно,
+    Notification Service обрабатывает его идемпотентно.
+end note
+
+SHOW_LEGEND()
+
+@enduml

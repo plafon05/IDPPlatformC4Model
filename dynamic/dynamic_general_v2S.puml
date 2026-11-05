@@ -1,0 +1,188 @@
+@startuml dynamic_process
+
+title IDP Platform — динамическая диаграмма\nНазначение ИПР с курсом LMS, проверка результата и обновление Skill Gap
+
+autonumber
+hide footbox
+
+skinparam shadowing false
+skinparam maxMessageSize 160
+skinparam sequenceMessageAlign center
+skinparam sequenceParticipantFontColor White
+skinparam responseMessageBelowArrow true
+
+participant "color:whitesize:28<&person></size>\n<b>Руководитель</b>\n[Person]</color>" as manager #08427B
+participant "color:whitesize:28<&person></size>\n<b>Сотрудник</b>\n[Person]</color>" as employee #08427B
+
+box "IDP Platform" #F0F4F8
+participant "API Gateway\n[Go]" as gateway <<container>> #438DD5
+participant "Employee Service\n[Go]" as employeeService <<container>> #438DD5
+participant "Talent Service\n[Go]" as talentService <<container>> #438DD5
+participant "Development Plan Service\n[Go]" as developmentService <<container>> #438DD5
+participant "Notification Service\n[Go]" as notificationService <<container>> #438DD5
+queue "Брокер событий\n[Apache Kafka]" as kafka <<container>> #438DD5
+end box
+
+participant "Корпоративная LMS" as lms <<external_system>> #999999
+participant "Корпоративный SMTP-сервис\n[SMTP / TLS]" as smtp <<external_system>> #999999
+
+note over gateway, notificationService
+Пользователи вошли в платформу.
+SSE-подключения сотрудника и руководителя через Gateway установлены.
+Gateway проверяет токены, сервисы — права на операции и записи.
+Действия пользователей выполняются через веб-приложение.
+end note
+
+== Выбор сотрудника и просмотр дефицитов ==
+
+manager -> gateway : Запрашивает список подчинённых\nGET /api/v1/managers/{id}/subordinates\n[HTTPS / REST / JSON]
+gateway -> employeeService : Передаёт запрос и контекст пользователя\n[HTTPS / REST / JSON]
+employeeService -> employeeService : Проверяет право просмотра команды\nуказанного руководителя
+
+break Доступ запрещён
+employeeService --> gateway : 403 Forbidden\n[HTTPS / JSON]
+gateway --> manager : Отказ в доступе\n[HTTPS / JSON]
+end
+
+employeeService --> gateway : Доступные сотрудники и текущие должности\n[HTTPS / JSON]
+gateway --> manager : Список для выбора сотрудника\n[HTTPS / JSON]
+
+manager -> gateway : Выбирает сотрудника и запрашивает\nпрофиль развития, Skill Gap и рекомендации\n[HTTPS / REST / JSON]
+gateway -> talentService : Передаёт запрос с контекстом руководителя\n[HTTPS / REST / JSON]
+talentService --> gateway : Профиль, окончательные уровни,\nдефициты и рекомендации, включая курсы LMS\n[HTTPS / JSON]
+gateway --> manager : Данные для подготовки ИПР\n[HTTPS / JSON]
+
+note over talentService, lms
+Каталог курсов ранее получен через адаптер LMS.
+Skill Gap учитывает только действующие окончательные уровни.
+Неоценённые компетенции не приравниваются к нулю.
+end note
+
+== Подготовка и назначение ИПР ==
+
+manager -> gateway : Ищет ПР в личном архиве\nили общей библиотеке\n[HTTPS / REST / JSON]
+gateway -> developmentService : Передаёт запрос поиска\n[HTTPS / REST / JSON]
+developmentService --> gateway : Доступные ПР и их версии\n[HTTPS / JSON]
+gateway --> manager : Результаты поиска\n[HTTPS / JSON]
+
+manager -> gateway : Выбирает ПР и создаёт черновик ИПР\nдля выбранного сотрудника\n[HTTPS / REST / JSON]
+gateway -> developmentService : Передаёт команду создания\n[HTTPS / REST / JSON]
+developmentService -> developmentService : Создаёт отдельную копию выбранной версии ПР
+developmentService --> gateway : Созданный черновик ИПР\n[HTTPS / JSON]
+gateway --> manager : Черновик для настройки\n[HTTPS / JSON]
+
+manager -> gateway : Настраивает задание с курсом LMS,\nсрок, вес, критерий и проверку руководителем;\nзадаёт условия контрольной точки и правило:\nкакую компетенцию и до какого окончательного уровня обновить\n[HTTPS / REST / JSON]
+gateway -> developmentService : Передаёт настройки ИПР\n[HTTPS / REST / JSON]
+developmentService -> developmentService : Проверяет и сохраняет настройки ИПР и правило контрольной точки
+
+manager -> gateway : Назначает подготовленный ИПР\n[HTTPS / REST / JSON]
+gateway -> developmentService : Передаёт команду назначения\n[HTTPS / REST / JSON]
+developmentService -> developmentService : Проверяет план; сохраняет статус «Выполняется»\nи событие назначения в outbox
+developmentService --> gateway : ИПР назначен\n[HTTPS / JSON]
+gateway --> manager : Подтверждение назначения\n[HTTPS / JSON]
+
+== Уведомление сотрудника ==
+
+developmentService -> kafka : Публикует событие назначения ИПР\nчерез outbox\n[Kafka protocol / TLS]
+kafka -> notificationService : Передаёт событие назначения\n[Kafka protocol / TLS]
+notificationService -> notificationService : Сохраняет уведомление и задания доставки\nс учётом настроек получателя
+notificationService -> gateway : Уведомление о назначении ИПР\n[HTTPS / SSE]
+gateway -> employee : Доставляет уведомление в интерфейс\n[HTTPS / SSE]
+
+opt Email предусмотрен настройками
+notificationService -> smtp : Письмо о назначении ИПР\n[SMTP / TLS]
+end
+
+== Выполнение курса и получение результата ==
+
+employee -> gateway : Открывает назначенный ИПР\n[HTTPS / REST / JSON]
+gateway -> developmentService : Запрашивает ИПР с контекстом сотрудника\n[HTTPS / REST / JSON]
+developmentService --> gateway : Задания, критерии и ссылка на курс LMS\n[HTTPS / JSON]
+gateway --> employee : Возвращает ИПР для отображения\n[HTTPS / JSON]
+
+employee -> lms : Проходит курс; LMS сохраняет результат\n[HTTPS]
+
+talentService -> lms : При очередной синхронизации\nзапрашивает результаты обучения\n[HTTPS / REST / JSON]
+lms --> talentService : Результат курса и идентификатор сотрудника\n[HTTPS / JSON]
+talentService -> talentService : Сопоставляет сотрудника и курс;\nсохраняет результат и событие в outbox
+talentService -> kafka : Публикует результат обучения через outbox\n[Kafka protocol / TLS]
+kafka -> developmentService : Передаёт результат обучения\n[Kafka protocol / TLS]
+developmentService -> developmentService : Связывает результат с заданием;\nпроверяет критерий и фиксирует\nожидание проверки руководителем
+
+note over talentService, developmentService
+Результат курса соответствует критерию задания,
+но выполнение должен подтвердить руководитель.
+Само завершение курса не меняет уровни компетенций.
+end note
+
+== Проверка задания руководителем ==
+
+developmentService -> kafka : Публикует событие ожидания проверки\nчерез outbox\n[Kafka protocol / TLS]
+kafka -> notificationService : Передаёт событие\n[Kafka protocol / TLS]
+notificationService -> notificationService : Сохраняет уведомление руководителю\nи задания доставки
+notificationService -> gateway : Передаёт уведомление руководителю\n[HTTPS / SSE]
+gateway -> manager : Уведомляет о результате, ожидающем проверки\n[HTTPS / SSE]
+
+opt Email предусмотрен настройками
+notificationService -> smtp : Письмо о необходимости проверки\n[SMTP / TLS]
+end
+
+manager -> gateway : Запрашивает результат задания\n[HTTPS / REST / JSON]
+gateway -> developmentService : Передаёт запрос с контекстом руководителя\n[HTTPS / REST / JSON]
+developmentService --> gateway : Критерий задания и результат курса\n[HTTPS / JSON]
+gateway --> manager : Данные для проверки\n[HTTPS / JSON]
+
+manager -> gateway : Подтверждает выполнение задания\n[HTTPS / REST / JSON]
+gateway -> developmentService : Передаёт решение руководителя\n[HTTPS / REST / JSON]
+developmentService -> developmentService : Сохраняет решение и автора;\nотмечает задание выполненным;\nпересчитывает взвешенный прогресс;\nпроверяет и фиксирует контрольную точку;\nзаписывает CheckpointReached с данными правила в outbox
+developmentService --> gateway : Обновлённый прогресс;\nконтрольная точка достигнута\n[HTTPS / JSON]
+gateway --> manager : Результат проверки\n[HTTPS / JSON]
+
+note right of developmentService
+Условия контрольной точки выполнены.
+Контрольная точка отдельного веса не добавляет.
+100% прогресса не завершает ИПР автоматически.
+end note
+
+== Достижение контрольной точки ==
+
+developmentService -> kafka : Публикует CheckpointReached с данными правила\nчерез outbox\n[Kafka protocol / TLS]
+kafka -> talentService : Передаёт CheckpointReached\nс данными настроенного правила\n[Kafka protocol / TLS]
+talentService -> talentService : Обновляет сведения о ходе ИПР;\nидемпотентно применяет заданное правило,\nсохраняет окончательный уровень, основание и событие в outbox
+
+kafka -> notificationService : Передаёт событие для уведомлений\n[Kafka protocol / TLS]
+notificationService -> notificationService : Сохраняет уведомления сотруднику\nи руководителю, создаёт задания доставки
+notificationService -> gateway : Передаёт уведомления получателям\n[HTTPS / SSE]
+gateway -> employee : Уведомляет о достижении точки\n[HTTPS / SSE]
+gateway -> manager : Уведомляет о достижении точки\n[HTTPS / SSE]
+
+opt Email предусмотрен настройками получателей
+notificationService -> smtp : Письма о достижении контрольной точки\n[SMTP / TLS]
+end
+
+== Уведомление об изменении уровня и просмотр Skill Gap ==
+
+talentService -> kafka : Публикует событие изменения уровней\nчерез outbox\n[Kafka protocol / TLS]
+kafka -> notificationService : Передаёт событие автоматического изменения уровня\n[Kafka protocol / TLS]
+notificationService -> notificationService : Сохраняет уведомление сотруднику\nи задания доставки
+notificationService -> gateway : Передаёт уведомление сотруднику\n[HTTPS / SSE]
+gateway -> employee : Уведомляет об обновлении уровня по правилу ИПР\n[HTTPS / SSE]
+
+opt Email предусмотрен настройками
+notificationService -> smtp : Письмо об обновлении уровня по правилу ИПР\n[SMTP / TLS]
+end
+
+employee -> gateway : Открывает обновлённый профиль развития\n[HTTPS / REST / JSON]
+gateway -> talentService : Запрашивает профиль с контекстом сотрудника\n[HTTPS / REST / JSON]
+talentService -> talentService : Рассчитывает Skill Gap по новым окончательным уровням
+talentService --> gateway : Окончательные уровни,\nтребования профиля и обновлённый Skill Gap\n[HTTPS / JSON]
+gateway --> employee : Возвращает профиль для отображения\n[HTTPS / JSON]
+
+note over notificationService, smtp
+Email и in-app доставляются независимо.
+Без активного SSE уведомление остаётся в истории.
+Неудачная доставка может повторяться;
+повторная обработка событий не создаёт бесконтрольных дублей.
+end note
+
+@enduml

@@ -1,8 +1,8 @@
 @startuml IDP_Platform_DevelopmentPlan_L0
 
-!include <C4/C4_Context>
+!include <C4/C4_Container>
 
-title IDP Platform — Системный ландшафт (Level 0: Локальный фокус — Development Plan Service)
+title IDP Platform — Локальный фрагмент системного ландшафта с детализацией Development Plan Service
 
 LAYOUT_LEFT_RIGHT()
 
@@ -22,10 +22,10 @@ Enterprise_Boundary(organization, "Корпоративная среда орг�
     }
 
     System_Boundary(idpPlatform, "IDP Platform") {
-        System(developmentService, "Development Plan Service", "Управляет библиотекой ПР, ИПР, заданиями, адаптацией и контролем сроков; рассчитывает взвешенный прогресс.\n[Область локального фокуса]")
-        System(employeeService, "Employee Service", "Сотрудники и оргструктура; публикует кадровые события.")
-        System(talentService, "Talent Service", "Компетенции, тесты и интеграция с LMS; публикует результаты курсов и тестов.")
-        System(notificationService, "Notification Service", "Уведомления в приложении и по email.")
+        Container(developmentService, "Development Plan Service", "Go", "Управляет библиотекой ПР, ИПР, заданиями, адаптацией и контролем сроков; рассчитывает взвешенный прогресс.\n[Область локального фокуса]")
+        Container(employeeService, "Employee Service", "Go", "Сотрудники и оргструктура; публикует кадровые события.")
+        Container(talentService, "Talent Service", "Go", "Компетенции, тесты и интеграция с LMS; публикует результаты курсов и тестов.")
+        Container(notificationService, "Notification Service", "Go", "Уведомления в приложении и по email.")
     }
 
     System_Ext(hris, "HRIS / Кадровая система", "Ведёт кадровые сведения, должности, подразделения и подчинённость.")
@@ -41,12 +41,13 @@ Rel(hrAdmin, developmentService, "Ведёт библиотеку ПР и шаб
 
 ' Встраивание Development Plan Service через события смежных сервисов
 Rel_L(employeeService, hris, "Получает сведения о сотрудниках, должностях и оргструктуре", "HTTPS / REST / JSON", $tags="interaction")
-Rel(employeeService, developmentService, "Приём, перевод, смена руководителя → план адаптации, переназначение ИПР", "Kafka / TLS", $tags="events")
+Rel(employeeService, developmentService, "Передаёт событие приёма сотрудника для создания плана адаптации", "Kafka / TLS", $tags="events")
 
 Rel_L(talentService, lms, "Получает каталог курсов и результаты прохождения", "HTTPS / REST / JSON", $tags="interaction")
 Rel(talentService, developmentService, "Результаты курсов LMS и тестов, изменения компетенций", "Kafka / TLS", $tags="events")
 
-Rel(developmentService, notificationService, "Назначение ИПР, задания на проверке, сроки и просрочки", "Kafka / TLS", $tags="events")
+Rel(developmentService, talentService, "Передаёт событие контрольной точки с данными правила обновления уровня", "Kafka / TLS", $tags="events")
+Rel(developmentService, notificationService, "Назначение ИПР, задания на проверке, достижение контрольной точки, сроки и просрочки", "Kafka / TLS", $tags="events")
 Rel_R(notificationService, smtp, "Передаёт email-уведомления", "SMTP / TLS", $tags="interaction")
 
 ' Корпоративный вход

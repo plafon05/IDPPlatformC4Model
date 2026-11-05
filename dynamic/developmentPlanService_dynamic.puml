@@ -1,69 +1,77 @@
-@startuml Development_Plan_Service_Dynamic
+@startuml Development_Plan_Service_Dynamic_LMS
 
 !include <C4/C4_Component>
 
-title Динамическая диаграмма — Отправка результата задания ИПР на проверку и пересчёт прогресса (Development Plan Service)
+title Development Plan Service — проверка задания с курсом LMS и достижение контрольной точки
 
 LAYOUT_LEFT_RIGHT()
 
 skinparam nodesep 50
 skinparam ranksep 60
 
-Person(employee, "Сотрудник", "Отмечает выполнение задания ИПР «Практика» и прикладывает результат.")
-Container(gateway, "API Gateway", "Go", "Маршрутизирует вызовы, проверяет JWT-токен и передаёт контекст пользователя.")
+Person(manager, "Руководитель", "Проверяет результат курса и подтверждает выполнение задания ИПР.")
+Container(gateway, "API Gateway", "Go", "Проверяет JWT и передаёт контекст пользователя.")
+Container(talent, "Talent Service", "Go", "Получает результаты из LMS и применяет правила обновления компетенций.")
+ContainerQueue(kafka, "Брокер событий", "Apache Kafka", "Передаёт результаты обучения и события ИПР.")
+Container(notification, "Notification Service", "Go", "Уведомляет о задании на проверке и достижении контрольной точки.")
 
-Container_Boundary(developmentService, "Development Plan Service (Контейнер участника)") {
-    Component(controller, "Development API Controller", "Go / HTTP Handler", "Принимает REST-запрос, формирует SubmitResultCommand с Actor из токена.")
-    Component(planService, "Development Plan Service", "Go Application Service", "SubmitResult: права, выбор стратегии по критерию задания, переход статуса, взвешенный прогресс.")
-    Component(planRepo, "Plan Repository", "Go / pgx", "Читает ИПР с заданиями; сохраняет план и событие outbox в одной транзакции.")
-    Component(outboxWorker, "Outbox Publishing Worker", "Go Background Worker", "По таймеру запускает цикл публикации событий outbox.")
-    Component(outboxService, "Outbox Publication Service", "Go Application Service", "PublishBatch: получает pending-события, публикует и фиксирует результат.")
-    Component(outboxRepo, "Outbox Repository", "Go / pgx", "Выдаёт pending-события и отмечает отправленные.")
-    Component(producer, "Kafka Producer", "Go / Kafka Client", "Публикует события ИПР в Apache Kafka.")
+Container_Boundary(developmentService, "Development Plan Service") {
+    Component(controller, "Development API Controller", "Go / HTTP Handler", "Принимает запросы на просмотр результата и подтверждение задания.")
+    Component(consumer, "Kafka Event Consumer", "Go / Kafka Client", "Принимает результаты обучения от Talent Service.")
+    Component(planService, "Development Plan Service", "Go Application Service", "Проверяет критерии заданий и права руководителя, пересчитывает прогресс, проверяет контрольные точки.")
+    Component(planRepo, "Plan Repository", "Go / pgx", "Сохраняет изменения плана и события outbox в одной транзакции.")
+    Component(outboxWorker, "Outbox Publishing Worker", "Go Background Worker", "Периодически запускает публикацию событий.")
+    Component(outboxService, "Outbox Publication Service", "Go Application Service", "Публикует ожидающие события и фиксирует подтверждение Kafka.")
+    Component(outboxRepo, "Outbox Repository", "Go / pgx", "Читает и отмечает опубликованные события.")
+    Component(producer, "Kafka Producer", "Go / Kafka Client", "Публикует события ИПР.")
 }
 
-ContainerDb(developmentDb, "Development Plan DB", "PostgreSQL 16", "Хранит ИПР, задания, версии планов и outbox событий развития.")
-ContainerQueue(kafka, "Брокер событий", "Apache Kafka", "Топик development.events, ключ сообщения — ID плана.")
-Container(notification, "Notification Service", "Go", "Уведомляет руководителя о задании на проверке.")
+ContainerDb(developmentDb, "Development Plan DB", "PostgreSQL 16", "ИПР, задания, результаты, контрольные точки, правила изменения уровня и outbox.")
 
-' Синхронная часть: фиксация результата
-Rel(employee, gateway, "1. Отправка результата: POST /api/v1/plans/{planId}/tasks/{taskId}/result", "HTTPS / JSON")
-Rel(gateway, controller, "2. Проксирование запроса с контекстом пользователя", "HTTPS / REST / JSON")
-Rel(controller, planService, "3. SubmitResult(ctx, SubmitResultCommand{Source: employee})", "Go In-Process Call")
-Rel(planService, planRepo, "4. Get(ctx, planID)", "Go In-Process Call")
-Rel(planRepo, developmentDb, "5. SQL SELECT: ИПР, актуальный состав заданий и версия плана", "SQL / TCP: 5432")
+' Получение результата LMS
+Rel(talent, kafka, "1. Публикует LearningResultRecorded", "Kafka / TLS, порт 9092")
+Rel(kafka, consumer, "2. Передаёт LearningResultRecorded", "Kafka / TLS, порт 9092")
+Rel(consumer, planService, "3. Передаёт результат обучения для обработки", "Go In-Process Call")
+Rel(planService, planRepo, "4. Находит задание по сотруднику и курсу, проверяет критерий; сохраняет результат, on_review и событие TaskStatusChanged", "Go In-Process Call")
+Rel(planRepo, developmentDb, "5. Сохраняет результат, статус и запись outbox в одной транзакции", "PostgreSQL / TLS, порт 5432")
 
-' Альтернативный сценарий отказа
-Rel(controller, gateway, "5а. [Чужой ИПР / план не «выполняется»] 403 Forbidden / 409 Conflict", "HTTPS / JSON")
-Rel(gateway, employee, "5б. [При отказе] Сообщение об ошибке", "HTTPS / JSON")
+' Фоновая публикация; тот же путь используется после подтверждения
+Rel(outboxWorker, outboxService, "6. Запускает публикацию TaskStatusChanged\n17. Запускает публикацию CheckpointReached", "Go In-Process Call")
+Rel(outboxService, outboxRepo, "7, 18. Читает ожидающее событие; после подтверждения Kafka отмечает отправленным", "Go In-Process Call")
+Rel(outboxRepo, developmentDb, "7, 18. Читает и обновляет outbox", "PostgreSQL / TLS, порт 5432")
+Rel(outboxService, producer, "8, 19. Передаёт событие на публикацию", "Go In-Process Call")
+Rel(producer, kafka, "9. Публикует TaskStatusChanged (on_review)\n20. Публикует CheckpointReached с данными правила", "Kafka / TLS, порт 9092")
+Rel(kafka, notification, "10. Передаёт событие о задании на проверке\n22. Передаёт событие достижения контрольной точки", "Kafka / TLS, порт 9092")
 
-' Основной сценарий
-Rel(planService, planRepo, "6. Save(ctx, plan, expectedVersion, [TaskStatusChanged])", "Go In-Process Call")
-Rel(planRepo, developmentDb, "7. Транзакция: UPDATE задания и плана WHERE version = expected; INSERT outbox", "SQL / TCP: 5432")
-Rel(controller, gateway, "8. 200 OK: статус задания on_review, прогресс ИПР", "HTTPS / JSON")
-Rel(gateway, employee, "9. Отображение статуса «На проверке» и прогресса", "HTTPS / JSON")
+' Проверка руководителем и достижение контрольной точки
+Rel(manager, gateway, "11. Запрашивает сохранённый результат курса\n14. Подтверждает выполнение задания", "HTTPS / REST / JSON")
+Rel(gateway, controller, "11, 14. Передаёт запрос и контекст руководителя", "HTTPS / REST / JSON, порт 8080")
+Rel(controller, planService, "12. Запрашивает результат после проверки доступа\n15. Передаёт подтверждение после проверки доступа", "Go In-Process Call")
+Rel(planService, planRepo, "12. Читает результат и критерий задания\n15. Отмечает задание выполненным, пересчитывает прогресс и проверяет условия контрольной точки", "Go In-Process Call")
+Rel(planRepo, developmentDb, "12. Читает результат и критерий\n16. Сохраняет решение и прогресс; если условия точки выполнены, фиксирует достижение и CheckpointReached в outbox", "PostgreSQL / TLS, порт 5432")
+Rel(controller, gateway, "13. Возвращает результат и критерий\n16а. Возвращает обновлённый прогресс и состояние контрольной точки", "HTTPS / JSON")
+Rel(gateway, manager, "13. Показывает результат для проверки\n16а. Показывает результат подтверждения", "HTTPS / JSON")
 
-' Асинхронная часть: публикация события
-Rel(outboxWorker, outboxService, "10. PublishBatch(ctx, limit) по таймеру", "Go In-Process Call")
-Rel(outboxService, outboxRepo, "11. FetchPending(ctx, limit)", "Go In-Process Call")
-Rel(outboxRepo, developmentDb, "12. SQL SELECT ... FOR UPDATE SKIP LOCKED", "SQL / TCP: 5432")
-Rel(outboxService, producer, "13. Publish(ctx, TaskStatusChanged)", "Go In-Process Call")
-Rel(producer, kafka, "14. Запись в топик development.events (key = planID)", "Kafka protocol / TLS: 9092")
-Rel(outboxService, outboxRepo, "15. MarkSent(ctx, ids) после подтверждения брокера", "Go In-Process Call")
-Rel(outboxRepo, developmentDb, "16. SQL UPDATE outbox SET sent_at", "SQL / TCP: 5432")
-Rel(kafka, notification, "17. Доставка события подписчику: уведомить руководителя", "Kafka protocol / TLS: 9092")
+Rel(kafka, talent, "21. Передаёт CheckpointReached: сотрудник, контрольная точка и настроенное правило обновления уровня", "Kafka / TLS, порт 9092")
 
 note bottom of planService
-    Внутри компонента (шаги 4–6, см. L4):
-    StrategyRegistry.Resolve(task.Criterion) → EmployeeMarkStrategy.IsMet()
-    → Task.Accept(): RequiresReview → on_review
-    → Plan.Progress() — прогресс не растёт до подтверждения руководителем.
+    Результат LMS соответствует критерию задания,
+    но его выполнение должен подтвердить руководитель.
+    До подтверждения прогресс не увеличивается.
+    Показан случай, когда после подтверждения выполнены условия точки.
+end note
+
+note bottom of talent
+    Руководитель заранее задал компетенцию и её новый окончательный уровень.
+    Talent применяет правило после получения CheckpointReached.
+    Development Plan Service уровень компетенции не записывает.
 end note
 
 note bottom of producer
-    Доставка at-least-once: при сбое до MarkSent
-    событие будет опубликовано повторно,
-    Notification Service обрабатывает его идемпотентно.
+    Повторная доставка событий не должна повторно
+    менять статус задания или применять правило.
+    Номера, повторённые на нескольких связях,
+    обозначают части одного шага.
 end note
 
 SHOW_LEGEND()

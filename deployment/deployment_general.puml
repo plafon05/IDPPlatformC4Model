@@ -1,0 +1,268 @@
+@startuml IDP_Platform_Deployment
+
+!include <C4/C4_Deployment>
+
+skinparam linetype ortho
+skinparam nodesep 90
+skinparam ranksep 110
+
+title IDP Platform — общая диаграмма развёртывания\nКорпоративный ЦОД / Private Cloud, корпоративный вход через IAM / SSO
+
+LAYOUT_TOP_DOWN()
+
+' Цвета связей по группам
+
+AddRelTag("api",   $textColor="#1f6feb", $lineColor="#1f6feb")
+AddRelTag("db",    $textColor="#1a7f37", $lineColor="#1a7f37")
+AddRelTag("kafka", $textColor="#d9730d", $lineColor="#d9730d")
+AddRelTag("s3",    $textColor="#8250df", $lineColor="#8250df")
+AddRelTag("ext",   $textColor="#cf222e", $lineColor="#cf222e")
+AddRelTag("auth",  $textColor="#57606a", $lineColor="#57606a", $lineStyle=DashedLine())
+
+' Клиентская инфраструктура
+
+Deployment_Node(clientNetwork, "Клиентский сегмент", "Корпоративная сеть пользователей") {
+    Deployment_Node(workstation, "Рабочая станция", "Windows / macOS") {
+        Deployment_Node(browser, "Веб-браузер", "Chrome / Firefox / Edge") {
+            Container(web, "Веб-приложение", "React SPA / TypeScript", "Интерфейс сотрудников, руководителей и HR-администраторов.")
+        }
+    }
+}
+
+' Инфраструктура платформы
+
+Deployment_Node(datacenter, "Корпоративная инфраструктура IDP Platform", "Корпоративный ЦОД / Private Cloud") {
+
+    ' Общая точка входа
+
+    Deployment_Node(dmz, "Демилитаризованная зона — DMZ", "Подсеть 10.0.0.0/24") {
+
+        Deployment_Node(loadBalancerHost, "Сервер балансировщика", "Linux / Docker Host") {
+            Container(loadBalancer, "Балансировщик нагрузки", "NGINX / TCP stream", "Передаёт зашифрованные соединения двум экземплярам API Gateway. 1 экземпляр.")
+        }
+
+        Deployment_Node(gatewayHosts, "Кластер шлюзовых серверов", "Linux / Docker — 2 узла") {
+            Container(gateway, "API Gateway", "Go / Docker", "2 экземпляра, по одному на узел. Завершает внешний TLS, проверяет токены, маршрутизирует REST-запросы и проксирует SSE.")
+        }
+    }
+
+    ' Сервисы платформы
+
+    Deployment_Node(applicationNetwork, "Приватная сеть приложений", "Подсеть 10.0.1.0/24") {
+
+        Deployment_Node(webAssetsHost, "Сервер веб-ресурсов", "Linux / Docker Host") {
+            Container(webAssets, "Раздача веб-приложения", "NGINX / HTTPS", "Возвращает сборку React SPA: HTML, JavaScript и CSS. 1 экземпляр.")
+        }
+
+        Deployment_Node(employeeHosts, "Серверы Employee Service", "Linux / Docker — 2 узла") {
+            Container(employeeService, "Employee Service", "Go / Docker", "2 экземпляра, по одному на узел. Сотрудники, оргструктура, роли, синхронизация HRIS и публикация кадровых событий.")
+        }
+
+        Deployment_Node(talentHost, "Сервер Talent Service", "Linux / Docker Host") {
+            Container(talentService, "Talent Service", "Go / Docker", "1 экземпляр. Компетенции, оценки, Skill Gap, карьерные профили, рекомендации и интеграция с LMS.")
+        }
+
+        Deployment_Node(developmentHost, "Сервер Development Plan Service", "Linux / Docker Host") {
+            Container(developmentService, "Development Plan Service", "Go / Docker", "1 экземпляр. ПР, ИПР, задания, адаптация, контрольные точки и напоминания.")
+        }
+
+        Deployment_Node(notificationHost, "Сервер Notification Service", "Linux / Docker Host") {
+            Container(notificationService, "Notification Service", "Go / Docker", "1 экземпляр. История уведомлений, настройки, email, SSE и повторные попытки доставки.")
+        }
+
+        Deployment_Node(analyticsHost, "Сервер Analytics & Reporting Service", "Linux / Docker Host") {
+            Container(analyticsService, "Analytics & Reporting Service", "Go / Docker", "1 экземпляр. Аналитические проекции, показатели и экспорт отчётов в XLSX/PDF.")
+        }
+    }
+
+    ' Базы данных
+
+    Deployment_Node(databaseNetwork, "Приватная сеть баз данных", "Подсеть 10.0.2.0/24") {
+
+        Deployment_Node(employeeDbHost, "Основной сервер Employee DB", "PostgreSQL VM") {
+            ContainerDb(employeeDb, "Employee DB — Master", "PostgreSQL 16", "Сотрудники, оргструктура, роли, состояние синхронизации и outbox. Постоянное хранилище данных.")
+        }
+
+        Deployment_Node(employeeReplicaHost, "Резервный сервер Employee DB", "PostgreSQL VM") {
+            ContainerDb(employeeDbReplica, "Employee DB — Standby", "PostgreSQL 16", "Резервная реплика Employee DB. Постоянное хранилище данных.")
+        }
+
+        Deployment_Node(talentDbHost, "Сервер Talent DB", "PostgreSQL VM") {
+            ContainerDb(talentDb, "Talent DB", "PostgreSQL", "Компетенции, профили должностей, оценки, обучение, карьерные модели, проекции и outbox.")
+        }
+
+        Deployment_Node(developmentDbHost, "Сервер Development Plan DB", "PostgreSQL VM") {
+            ContainerDb(developmentDb, "Development Plan DB", "PostgreSQL", "Версии ПР, ИПР, задания, адаптация, контрольные точки, напоминания, проекции и outbox.")
+        }
+
+        Deployment_Node(notificationDbHost, "Сервер Notification DB", "PostgreSQL VM") {
+            ContainerDb(notificationDb, "Notification DB", "PostgreSQL", "Уведомления, настройки, шаблоны, задания доставки и статусы обработки.")
+        }
+
+        Deployment_Node(analyticsDbHost, "Сервер Analytics DB", "PostgreSQL VM") {
+            ContainerDb(analyticsDb, "Analytics DB", "PostgreSQL", "Собственные аналитические проекции, показатели и данные отчётности.")
+        }
+    }
+
+    ' Объектное хранилище
+
+    Deployment_Node(storageNetwork, "Приватная сеть хранения данных", "Подсеть 10.0.3.0/24") {
+        Deployment_Node(minioHosts, "Кластер объектного хранилища", "Linux / MinIO — 4 узла") {
+            ContainerDb(objectStorage, "Object Storage", "MinIO / S3 API", "Общее распределённое хранилище аватаров, вложений и отчётов. 4 узла с постоянными дисками.")
+        }
+    }
+
+    ' Брокер сообщений
+
+    Deployment_Node(brokerNetwork, "Приватная сеть брокера сообщений", "Подсеть 10.0.4.0/24") {
+        Deployment_Node(kafkaHosts, "Кластер брокера событий", "Linux / Apache Kafka — 3 узла") {
+            ContainerQueue(kafka, "Брокер событий", "Apache Kafka", "Общий кластер из 3 брокеров. Передаёт события платформы и хранит их на постоянных дисках.")
+        }
+    }
+}
+
+' Смежная корпоративная инфраструктура
+
+Deployment_Node(externalInfrastructure, "Смежная корпоративная инфраструктура", "Внешняя по отношению к IDP Platform") {
+
+    Deployment_Node(iamHost, "Инфраструктура идентификации", "Корпоративный IAM / SSO") {
+        System_Ext(iam, "Корпоративный IAM / SSO", "Аутентифицирует пользователей по OIDC и предоставляет ключи проверки токенов.")
+    }
+
+    Deployment_Node(hrisHost, "Инфраструктура кадровой системы", "Корпоративная HRIS") {
+        System_Ext(hris, "HRIS / Кадровая система", "Источник сотрудников, подразделений, должностей и связей подчинённости.")
+    }
+
+    Deployment_Node(lmsHost, "Инфраструктура обучения", "Корпоративная LMS") {
+        System_Ext(lms, "LMS / Обучающая платформа", "Предоставляет каталог курсов и результаты обучения через настроенный адаптер.")
+    }
+
+    Deployment_Node(smtpHost, "Корпоративный почтовый сервер", "Почтовая инфраструктура") {
+        System_Ext(smtp, "Корпоративный SMTP-сервис", "Принимает письма платформы для последующей доставки.")
+    }
+}
+
+' Скрытые связи для упорядочивания элементов (ничего не рисуют)
+
+Lay_R(employeeService, talentService)
+Lay_R(talentService, developmentService)
+Lay_R(developmentService, notificationService)
+Lay_R(notificationService, analyticsService)
+
+Lay_R(employeeDb, talentDb)
+Lay_R(talentDb, developmentDb)
+Lay_R(developmentDb, notificationDb)
+Lay_R(notificationDb, analyticsDb)
+
+Lay_R(iam, hris)
+Lay_R(hris, lms)
+Lay_R(lms, smtp)
+
+' Связи (на стрелках только номера, описание в таблице внизу)
+
+' Общая точка входа
+Rel_D(browser, loadBalancer, "1", $tags="api")
+Rel_D(loadBalancer, gateway, "2", $tags="api")
+Rel_D(gateway, webAssets, "3", $tags="api")
+
+' Корпоративная аутентификация
+Rel(web, iam, "4", $tags="auth")
+Rel(gateway, iam, "5", $tags="auth")
+
+' Маршрутизация API
+Rel_D(gateway, employeeService, "6", $tags="api")
+Rel_D(gateway, talentService, "7", $tags="api")
+Rel_D(gateway, developmentService, "8", $tags="api")
+Rel_D(gateway, notificationService, "9", $tags="api")
+Rel_D(gateway, analyticsService, "10", $tags="api")
+
+' Отдельная БД каждого сервиса
+Rel_D(employeeService, employeeDb, "11", $tags="db")
+Rel_R(employeeDb, employeeDbReplica, "12", $tags="db")
+Rel_D(talentService, talentDb, "13", $tags="db")
+Rel_D(developmentService, developmentDb, "14", $tags="db")
+Rel_D(notificationService, notificationDb, "15", $tags="db")
+Rel_D(analyticsService, analyticsDb, "16", $tags="db")
+
+' Обмен событиями
+Rel_R(employeeService, kafka, "17", $tags="kafka")
+Rel_R(talentService, kafka, "18", $tags="kafka")
+Rel_R(developmentService, kafka, "19", $tags="kafka")
+Rel_R(notificationService, kafka, "20", $tags="kafka")
+Rel_R(analyticsService, kafka, "21", $tags="kafka")
+
+' Объектное хранилище
+Rel_R(employeeService, objectStorage, "22", $tags="s3")
+Rel_R(developmentService, objectStorage, "23", $tags="s3")
+Rel_R(analyticsService, objectStorage, "24", $tags="s3")
+
+' Внешние интеграции
+Rel_U(employeeService, hris, "25", $tags="ext")
+Rel_U(talentService, lms, "26", $tags="ext")
+Rel_U(notificationService, smtp, "27", $tags="ext")
+
+' Правила доступа
+
+note bottom of dmz
+Из клиентского сегмента API платформы доступны через NGINX и Gateway.
+NGINX передаёт зашифрованный трафик; внешний TLS завершается на Gateway.
+Gateway устанавливает отдельные HTTPS-соединения с сервисами.
+end note
+
+note bottom of applicationNetwork
+Сервисы проверяют права на операции и конкретные записи.
+Входящие соединения к API сервисов разрешены от Gateway.
+Фоновые обработчики выполняются внутри соответствующих сервисов.
+end note
+
+note bottom of databaseNetwork
+Пользовательский доступ к БД запрещён.
+У каждого сервиса отдельные учётные данные и доступ к своей БД.
+Analytics Service строит проекции из событий и не читает базы других сервисов.
+Резервная Employee DB не используется как общая аналитическая БД.
+end note
+
+note bottom of brokerNetwork
+Доступ к Kafka ограничивается учётными данными и ACL топиков.
+Сетевые правила ограничивают соединения необходимыми узлами и портами.
+end note
+
+' Легенда: расшифровка номеров связей (во всех строках по 4 ячейки)
+
+note as LegendTable
+|= № |= Связь |= Описание |= Протокол |
+| 1 | Веб-приложение → Балансировщик | Загружает веб-приложение, вызывает API и открывает SSE | HTTPS / TCP 443 |
+| 2 | Балансировщик → API Gateway | Распределяет соединения между двумя экземплярами | HTTPS / TCP 443; TLS passthrough |
+| 3 | API Gateway → Раздача веб-приложения | Получает статические ресурсы веб-приложения | HTTPS / TCP 8443 |
+| 4 | Веб-приложение → IAM / SSO | Выполняет корпоративный вход | OIDC / PKCE / HTTPS / TCP 443 |
+| 5 | API Gateway → IAM / SSO | Получает конфигурацию OIDC и ключи проверки токенов | OIDC Discovery / JWKS / HTTPS / TCP 443 |
+| 6 | API Gateway → Employee Service | Передаёт запросы сотрудников и оргструктуры | HTTPS / REST / JSON / TCP 8080 |
+| 7 | API Gateway → Talent Service | Передаёт запросы компетенций, оценок и профиля развития | HTTPS / REST / JSON / TCP 8080 |
+| 8 | API Gateway → Development Plan Service | Передаёт запросы ПР, ИПР, заданий и адаптации | HTTPS / REST / JSON / TCP 8080 |
+| 9 | API Gateway → Notification Service | Передаёт REST-запросы и проксирует SSE | HTTPS / REST / JSON / SSE / TCP 8080 |
+| 10 | API Gateway → Analytics and Reporting Service | Передаёт запросы аналитики и отчётов | HTTPS / REST / JSON / TCP 8080 |
+| 11 | Employee Service → Employee DB Master | Читает и изменяет кадровые данные и outbox | PostgreSQL / TLS / TCP 5432 |
+| 12 | Employee DB Master → Employee DB Standby | Передаёт WAL для асинхронной потоковой репликации | PostgreSQL replication / TLS / TCP 5432 |
+| 13 | Talent Service → Talent DB | Хранит данные развития, оценки, проекции и outbox | PostgreSQL / TLS / TCP 5432 |
+| 14 | Development Plan Service → Development Plan DB | Хранит планы, задания, проекции и outbox | PostgreSQL / TLS / TCP 5432 |
+| 15 | Notification Service → Notification DB | Хранит уведомления, настройки и задания доставки | PostgreSQL / TLS / TCP 5432 |
+| 16 | Analytics and Reporting Service → Analytics DB | Хранит собственные аналитические проекции | PostgreSQL / TLS / TCP 5432 |
+| 17 | Employee Service → Kafka | Публикует кадровые события через outbox | Kafka protocol / TLS / TCP 9092 |
+| 18 | Talent Service → Kafka | Публикует события через outbox и получает события платформы | Kafka protocol / TLS / TCP 9092 |
+| 19 | Development Plan Service → Kafka | Публикует события через outbox и получает события платформы | Kafka protocol / TLS / TCP 9092 |
+| 20 | Notification Service → Kafka | Получает события для формирования уведомлений | Kafka protocol / TLS / TCP 9092 |
+| 21 | Analytics and Reporting Service → Kafka | Получает события для обновления аналитических проекций | Kafka protocol / TLS / TCP 9092 |
+| 22 | Employee Service → Object Storage | Сохраняет и получает аватары | S3 API / HTTPS / TCP 9000 |
+| 23 | Development Plan Service → Object Storage | Сохраняет и получает вложения заданий | S3 API / HTTPS / TCP 9000 |
+| 24 | Analytics and Reporting Service → Object Storage | Сохраняет и получает сформированные отчёты | S3 API / HTTPS / TCP 9000 |
+| 25 | Employee Service → HRIS | Синхронизирует сотрудников и оргструктуру | HTTPS / REST / JSON / TCP 443 |
+| 26 | Talent Service → LMS | Получает каталог курсов и результаты обучения | HTTPS / REST / JSON / TCP 443 |
+| 27 | Notification Service → SMTP | Передаёт email для доставки | SMTP / STARTTLS / TCP 587 |
+
+|<color:#1f6feb>■</color> REST / HTTPS через Gateway|<color:#1a7f37>■</color> Доступ к БД и репликация|<color:#d9730d>■</color> Обмен событиями через Kafka|
+|<color:#8250df>■</color> Объектное хранилище (S3 API)|<color:#cf222e>■</color> Интеграции с внешними системами|<color:#57606a>■</color> Аутентификация (пунктир)|
+end note
+
+Lay_D(kafka, LegendTable)
+
+@enduml

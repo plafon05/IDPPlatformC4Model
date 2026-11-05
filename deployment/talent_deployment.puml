@@ -35,17 +35,14 @@ Deployment_Node(cloud, "Корпоративный ЦОД / Private Cloud", "В�
     }
 
     Deployment_Node(app_net, "Приватная сеть приложений", "Изолированная подсеть 10.0.1.0/24") {
-        Deployment_Node(app_host, "Сервер приложений Talent Service", "Ubuntu Linux / Docker Host (2 экземпляра)") {
-            Container(talent_service, "Talent Service", "Go (Docker Container)", "Компетенции, карьера, обучение, резерв, Skill Gap, результаты обучения, уровни по контрольным точкам [2 экземпляра / Replicas]")
+        Deployment_Node(app_host, "Сервер приложений Talent Service", "Ubuntu Linux / Docker Host (1 экземпляр)") {
+            Container(talent_service, "Talent Service", "Go (Docker Container)", "Компетенции, карьера, обучение, резерв, Skill Gap, результаты обучения, уровни по контрольным точкам [1 экземпляр]")
         }
     }
 
     Deployment_Node(db_net, "Приватная сеть баз данных", "Изолированная подсеть 10.0.2.0/24") {
-        Deployment_Node(db_master_host, "Сервер БД (Мастер)", "Managed PostgreSQL VM (1 экземпляр)") {
-            ContainerDb(talent_db_master, "Talent DB (Master)", "PostgreSQL 16", "Основная БД: чтение и запись данных, платежей и outbox [1 экземпляр]")
-        }
-        Deployment_Node(db_replica_host, "Сервер БД (Реплика)", "Managed PostgreSQL VM (1 экземпляр)") {
-            ContainerDb(talent_db_replica, "Talent DB (Standby)", "PostgreSQL 16", "Резервная реплика Talent DB [1 экземпляр]")
+        Deployment_Node(talent_db_host, "Сервер Talent DB", "Managed PostgreSQL VM (1 экземпляр)") {
+            ContainerDb(talent_db, "Talent DB", "PostgreSQL 16", "БД: чтение и запись данных, платежей и outbox [1 экземпляр]")
         }
     }
 
@@ -74,8 +71,7 @@ Rel(payment, nginx, "Webhook статуса платежа (подпись HMAC-
 Rel(nginx, gateway, "Распределяет соединения между двумя экземплярами", "HTTPS / TCP 443")
 Rel(gateway, talent_service, "Проксирование запросов (и webhook платежей) в защищённый контур", "HTTPS / REST / JSON, порт 8080")
 
-Rel(talent_service, talent_db_master, "Запись и чтение транзакционных данных", "PostgreSQL / TLS, порт 5432")
-Rel(talent_db_master, talent_db_replica, "Потоковая асинхронная репликация", "WAL / TCP 5432")
+Rel(talent_service, talent_db, "Запись и чтение транзакционных данных", "PostgreSQL / TLS, порт 5432")
 
 Rel(talent_service, kafka, "Публикация результатов обучения (outbox); чтение событий контрольных точек", "Kafka protocol / TLS, порт 9092")
 Rel(talent_service, lms, "Синхронизация каталога курсов и результатов обучения", "HTTPS / REST / JSON, порт 443")

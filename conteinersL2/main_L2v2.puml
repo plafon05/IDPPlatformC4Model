@@ -11,81 +11,80 @@ skinparam nodesep 40
 
 ' Пользователи
 together {
-    Person(employee, "Сотрудник", "Работает с ИПР, задачами, компетенциями и карьерными целями.")
-    Person(manager, "Руководитель", "Согласовывает ИПР, оценивает сотрудников и развитие команды.")
-    Person(hrAdmin, "HR-администратор", "Управляет справочниками, карьерными моделями и кадровым резервом.")
+    Person(employee, "Сотрудник", "Работает с ИПР, заданиями, компетенциями и карьерными целями.")
+    Person(manager, "Руководитель", "Составляет и назначает ИПР, проверяет задания, оценивает компетенции и отслеживает развитие команды.")
+    Person(hrAdmin, "HR-администратор", "Управляет учётными записями, справочниками, карьерными моделями и кадровым резервом.")
 }
-
 
 ' Внешние системы
 System_Ext(lms, "LMS / Обучающая платформа", "Предоставляет курсы, прогресс и результаты обучения.")
-System_Ext(iam, "Корпоративный IAM / SSO", "Обеспечивает единый вход и выдаёт токены доступа.")
+System_Ext(iam, "Корпоративный IAM / SSO", "Обеспечивает единый вход и выдаёт токены доступа при подключённом SSO.")
 System_Ext(hris, "HRIS / Кадровая система", "Предоставляет сведения о сотрудниках и оргструктуре.")
 System_Ext(smtp, "Корпоративный SMTP-сервис", "Обеспечивает доставку email.")
 
-
 ' Контейнеры платформы
 System_Boundary(idpPlatform, "IDP Platform — платформа развития сотрудников") {
+    Container(web, "Web Application", "React, TypeScript", "Интерфейс ИПР, компетенций, карьеры, обучения, адаптации, аналитики и уведомлений.", $baseShape="frame")
+    Container(gateway, "API Gateway", "Go", "Маршрутизирует запросы, проверяет локальные или корпоративные токены, ограничивает частоту запросов и проксирует SSE.", $baseShape="hexagon")
 
-    Container(web, "Web Application", "React, TypeScript","Интерфейс ИПР, компетенций, карьеры, обучения, адаптации, аналитики и уведомлений.",$baseShape="frame")
-    Container(gateway, "API Gateway", "Go","Маршрутизирует запросы, проверяет токены, ограничивает частоту запросов и проксирует SSE.",$baseShape="hexagon")
-    ContainerQueue(eventStreams, "Брокер событий", "Apache Kafka","Хранит и передаёт события между сервисами.")
-    Container(employeeService, "Employee Service", "Go","Управляет сотрудниками, оргструктурой, ролями и синхронизацией с HRIS.")
-    ContainerDb(employeeDb, "Employee DB", "PostgreSQL","Хранит сотрудников, оргструктуру, роли, данные синхронизации и outbox.")
-    Container(developmentService, "Development Plan Service", "Go","Управляет ИПР, задачами, оценками, комментариями, адаптацией и напоминаниями.")
-    ContainerDb(developmentDb, "Development Plan DB", "PostgreSQL","Хранит планы, задачи, оценки, шаблоны, напоминания, проекции и outbox.")
-    Container(analyticsService, "Analytics & Reporting Service", "Go, Excelize, go-pdf/fpdf","Рассчитывает показатели и формирует аналитические отчёты XLSX/PDF.")
-    ContainerDb(analyticsDb, "Analytics DB", "PostgreSQL","Хранит аналитические проекции, права доступа и данные отчётности.")
-    Container(talentService, "Talent Service", "Go","Управляет компетенциями, карьерой, обучением и резервом. Формирует Talent Profile, Skill Gap и рекомендации.")
-    ContainerDb(objectStorage, "Object Storage", "MinIO","Хранит аватары, вложения и отчёты.")
-    ContainerDb(talentDb, "Talent DB", "PostgreSQL","Хранит компетенции, карьерные модели, обучение, резерв, проекции и outbox.")
-    Container(notificationService, "Notification Service", "Go","Доставляет email и in-app уведомления, управляет их историей и повторными попытками.")
-    ContainerDb(notificationDb, "Notification DB", "PostgreSQL","Хранит уведомления, настройки, статусы прочтения и доставки.")
+    ContainerQueue(eventStreams, "Брокер событий", "Apache Kafka", "Хранит и передаёт события между сервисами.")
+
+    Container(employeeService, "Employee Service", "Go", "Управляет сотрудниками, оргструктурой, прикладными ролями и синхронизацией с HRIS. Обеспечивает активацию учётных записей, локальный вход, смену пароля, подтверждение контактов и выдачу локальных токенов.")
+    ContainerDb(employeeDb, "Employee DB", "PostgreSQL", "Хранит кадровые данные, назначения ролей, хеши паролей, данные активации и подтверждения контактов, состояние синхронизации и outbox.")
+
+    Container(developmentService, "Development Plan Service", "Go", "Управляет библиотекой ПР, ИПР и адаптацией. Отвечает за проверку выполнения заданий, комментарии и контроль сроков.")
+    ContainerDb(developmentDb, "Development Plan DB", "PostgreSQL", "Хранит версии ПР, ИПР, задания, результаты проверки, шаблоны адаптации, напоминания, проекции и outbox.")
+
+    Container(analyticsService, "Analytics & Reporting Service", "Go, Excelize, go-pdf/fpdf", "Рассчитывает показатели и формирует аналитические отчёты XLSX/PDF.")
+    ContainerDb(analyticsDb, "Analytics DB", "PostgreSQL", "Хранит аналитические проекции, права доступа и данные отчётности.")
+
+    Container(talentService, "Talent Service", "Go", "Управляет компетенциями, оценкой компетенций, тестированием, карьерой, обучением и кадровым резервом. Формирует Talent Profile, рассчитывает Skill Gap и подбирает рекомендации.")
+    ContainerDb(talentDb, "Talent DB", "PostgreSQL", "Хранит компетенции, оценки, версии тестов и результаты прохождения, карьерные модели, обучение, резерв, проекции и outbox.")
+
+    Container(notificationService, "Notification Service", "Go", "Доставляет email и уведомления в приложении, хранит историю и выполняет повторные попытки доставки.")
+    ContainerDb(notificationDb, "Notification DB", "PostgreSQL", "Хранит уведомления, настройки, статусы прочтения и доставки.")
+
+    ContainerDb(objectStorage, "Object Storage", "MinIO", "Хранит аватары, вложения и отчёты.")
 }
-
 
 ' Пользовательский интерфейс
 Rel(employee, web, "Работает со своим развитием", "HTTPS")
 Rel(manager, web, "Управляет развитием команды", "HTTPS")
 Rel(hrAdmin, web, "Администрирует платформу", "HTTPS")
 
+' Вход и маршрутизация запросов
+Rel(web, gateway, "Выполняет локальный вход, вызывает API и получает уведомления", "HTTPS / REST / SSE")
+Rel(web, iam, "Выполняет корпоративный вход при подключённом SSO", "OIDC / PKCE / HTTPS")
+Rel(gateway, iam, "Получает ключи проверки корпоративных токенов", "OIDC Discovery / JWKS / HTTPS")
 
-' Аутентификация и входная точка
-Rel(web, gateway, "Вызывает API и получает уведомления", "HTTPS / REST / SSE")
-Rel(web, iam, "Входит в систему и получает токены", "OIDC / PKCE / HTTPS")
-Rel(gateway, iam, "Получает ключи проверки токенов", "OIDC Discovery / JWKS / HTTPS")
+Rel(gateway, employeeService, "Передаёт запросы по локальному входу, сотрудникам и ролям. Получает открытые ключи для проверки локальных токенов", "HTTPS / REST / JSON / JWKS")
+Rel(gateway, developmentService, "Передаёт запросы по ПР, ИПР, заданиям и адаптации", "HTTPS / REST / JSON")
+Rel(gateway, analyticsService, "Передаёт запросы аналитики и отчётов", "HTTPS / REST / JSON")
+Rel(gateway, talentService, "Передаёт запросы по компетенциям, оценкам, тестам и карьере", "HTTPS / REST / JSON")
+Rel(gateway, notificationService, "Передаёт запросы уведомлений и проксирует SSE", "HTTPS / REST / SSE")
 
-
-' Маршрутизация запросов
-Rel(gateway, employeeService, "Запросы сотрудников и оргструктуры", "HTTPS / REST / JSON")
-Rel(gateway, developmentService, "Запросы ИПР и адаптации", "HTTPS / REST / JSON")
-Rel(gateway, analyticsService, "Запросы аналитики и отчётов", "HTTPS / REST / JSON")
-Rel(gateway, talentService, "Запросы компетенций и карьеры", "HTTPS / REST / JSON")
-Rel(gateway, notificationService, "Запросы уведомлений и SSE", "HTTPS / REST / SSE")
-
-
-' Связи сервисов с БД, брокером, хранилищем и внешними системами
-Rel(employeeService, employeeDb, "Читает и изменяет кадровые данные и outbox", "PostgreSQL / TLS")
-Rel(employeeService, hris, "Синхронизирует сотрудников и оргструктуру", "HTTPS / REST / JSON")
-Rel(employeeService, eventStreams, "Публикует кадровые события", "Kafka protocol / TLS")
+' Сервисы, данные и интеграции
+Rel(employeeService, employeeDb, "Читает и изменяет кадровые данные, данные локального входа и outbox", "PostgreSQL / TLS")
+Rel(employeeService, hris, "Синхронизирует данные сотрудников, должности и подчинённость", "HTTPS / REST / JSON")
+Rel(employeeService, eventStreams, "Публикует кадровые события и события для отправки писем активации и подтверждения контактов", "Kafka protocol / TLS")
 Rel(employeeService, objectStorage, "Работает с аватарами", "S3 API / HTTPS")
 
 Rel(developmentService, objectStorage, "Работает с вложениями", "S3 API / HTTPS")
-Rel(developmentService, eventStreams, "Публикует и читает события развития", "Kafka protocol / TLS")
+Rel(developmentService, eventStreams, "Публикует события планов и получает результаты тестов для заданий ИПР", "Kafka protocol / TLS")
 Rel(developmentService, developmentDb, "Читает и изменяет планы, проекции и outbox", "PostgreSQL / TLS")
 
-Rel(analyticsService, analyticsDb, "Читает и сохраняет аналитику", "PostgreSQL / TLS")
+Rel(analyticsService, analyticsDb, "Читает и сохраняет аналитические данные", "PostgreSQL / TLS")
 Rel(analyticsService, objectStorage, "Работает с отчётами", "S3 API / HTTPS")
 Rel(analyticsService, eventStreams, "Читает события для аналитики", "Kafka protocol / TLS")
 
 Rel(talentService, talentDb, "Читает и изменяет данные развития и outbox", "PostgreSQL / TLS")
-Rel(talentService, eventStreams, "Публикует и читает события развития", "Kafka protocol / TLS")
+Rel(talentService, eventStreams, "Читает события развития и публикует результаты оценок и тестов", "Kafka protocol / TLS")
 Rel(talentService, lms, "Получает курсы и результаты обучения", "HTTPS / REST / JSON")
+talentService -[norank]-> developmentService : Запрашивает ПР и задания\nдля рекомендаций\n[HTTPS / REST / JSON]
 
-Rel(notificationService, eventStreams, "Читает события для уведомлений", "Kafka protocol / TLS")
+Rel(notificationService, eventStreams, "Читает события для уведомлений и служебных писем", "Kafka protocol / TLS")
 Rel(notificationService, notificationDb, "Хранит уведомления и статусы доставки", "PostgreSQL / TLS")
-Rel(notificationService, smtp, "Отправляет email", "SMTP / TLS")
-
+Rel(notificationService, smtp, "Отправляет уведомления и служебные письма", "SMTP / TLS")
 
 SHOW_LEGEND()
 

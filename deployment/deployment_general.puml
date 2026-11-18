@@ -6,7 +6,7 @@ skinparam linetype ortho
 skinparam nodesep 90
 skinparam ranksep 110
 
-title IDP Platform — общая диаграмма развёртывания\nКорпоративный ЦОД / Private Cloud, корпоративный вход через IAM / SSO
+title IDP Platform — общая диаграмма развёртывания\nКорпоративный ЦОД / Private Cloud, локальный вход и подключаемый IAM / SSO
 
 LAYOUT_TOP_DOWN()
 
@@ -42,7 +42,7 @@ Deployment_Node(datacenter, "Корпоративная инфраструкту
         }
 
         Deployment_Node(gatewayHosts, "Кластер шлюзовых серверов", "Linux / Docker — 2 узла") {
-            Container(gateway, "API Gateway", "Go / Docker", "2 экземпляра, по одному на узел. Завершает внешний TLS, проверяет токены, маршрутизирует REST-запросы и проксирует SSE.")
+            Container(gateway, "API Gateway", "Go / Docker", "2 экземпляра, по одному на узел. Завершает внешний TLS, проверяет локальные или корпоративные токены, маршрутизирует REST-запросы и проксирует SSE.")
         }
     }
 
@@ -55,7 +55,8 @@ Deployment_Node(datacenter, "Корпоративная инфраструкту
         }
 
         Deployment_Node(employeeHosts, "Серверы Employee Service", "Linux / Docker — 2 узла") {
-            Container(employeeService, "Employee Service", "Go / Docker", "2 экземпляра, по одному на узел. Сотрудники, оргструктура, роли, синхронизация HRIS и публикация кадровых событий.")
+            Container(employeeService, "Employee Service", "Go / Docker", "2 экземпляра, по одному на узел. Сотрудники, оргструктура, прикладные роли, синхронизация с HRIS, локальный вход и выдача токенов.")
+
         }
 
         Deployment_Node(talentHost, "Сервер Talent Service", "Linux / Docker Host") {
@@ -80,7 +81,7 @@ Deployment_Node(datacenter, "Корпоративная инфраструкту
     Deployment_Node(databaseNetwork, "Приватная сеть баз данных", "Подсеть 10.0.2.0/24") {
 
         Deployment_Node(employeeDbHost, "Основной сервер Employee DB", "PostgreSQL VM") {
-            ContainerDb(employeeDb, "Employee DB — Master", "PostgreSQL 16", "Сотрудники, оргструктура, роли, состояние синхронизации и outbox. Постоянное хранилище данных.")
+            ContainerDb(employeeDb, "Employee DB — Master", "PostgreSQL 16", "Сотрудники, оргструктура, роли, данные локального входа, состояние синхронизации и outbox. Постоянное хранилище данных.")
         }
 
         Deployment_Node(employeeReplicaHost, "Резервный сервер Employee DB", "PostgreSQL VM") {
@@ -126,8 +127,7 @@ Deployment_Node(datacenter, "Корпоративная инфраструкту
 Deployment_Node(externalInfrastructure, "Смежная корпоративная инфраструктура", "Внешняя по отношению к IDP Platform") {
 
     Deployment_Node(iamHost, "Инфраструктура идентификации", "Корпоративный IAM / SSO") {
-        System_Ext(iam, "Корпоративный IAM / SSO", "Аутентифицирует пользователей по OIDC и предоставляет ключи проверки токенов.")
-    }
+       System_Ext(iam, "Корпоративный IAM / SSO", "При подключении обеспечивает корпоративный вход по OIDC и предоставляет ключи проверки токенов.")
 
     Deployment_Node(hrisHost, "Инфраструктура кадровой системы", "Корпоративная HRIS") {
         System_Ext(hris, "HRIS / Кадровая система", "Источник сотрудников, подразделений, должностей и связей подчинённости.")
@@ -231,26 +231,26 @@ end note
 
 note as LegendTable
 |= № |= Связь |= Описание |= Протокол |
-| 1 | Веб-приложение → Балансировщик | Загружает веб-приложение, вызывает API и открывает SSE | HTTPS / TCP 443 |
+| 1 | Веб-браузер → Балансировщик | Загружает веб-приложение, отправляет запросы API и локального входа, открывает SSE | HTTPS / TCP 443 |
 | 2 | Балансировщик → API Gateway | Распределяет соединения между двумя экземплярами | HTTPS / TCP 443; TLS passthrough |
 | 3 | API Gateway → Раздача веб-приложения | Получает статические ресурсы веб-приложения | HTTPS / TCP 8443 |
-| 4 | Веб-приложение → IAM / SSO | Выполняет корпоративный вход | OIDC / PKCE / HTTPS / TCP 443 |
-| 5 | API Gateway → IAM / SSO | Получает конфигурацию OIDC и ключи проверки токенов | OIDC Discovery / JWKS / HTTPS / TCP 443 |
-| 6 | API Gateway → Employee Service | Передаёт запросы сотрудников и оргструктуры | HTTPS / REST / JSON / TCP 8080 |
-| 7 | API Gateway → Talent Service | Передаёт запросы компетенций, оценок и профиля развития | HTTPS / REST / JSON / TCP 8080 |
+| 4 | Веб-приложение → IAM / SSO | Выполняет корпоративный вход, если подключён SSO | OIDC / PKCE / HTTPS / TCP 443 |
+| 5 | API Gateway → IAM / SSO | Получает конфигурацию OIDC и ключи проверки корпоративных токенов при подключённом SSO | OIDC Discovery / JWKS / HTTPS / TCP 443 |
+| 6 | API Gateway → Employee Service | Передаёт кадровые запросы и запросы локального входа. Получает открытые ключи проверки локальных токенов | HTTPS / REST / JSON / JWKS / TCP 8080 |
+| 7 | API Gateway → Talent Service | Передаёт запросы по компетенциям, оценкам, тестам и профилю развития | HTTPS / REST / JSON / TCP 8080 |
 | 8 | API Gateway → Development Plan Service | Передаёт запросы ПР, ИПР, заданий и адаптации | HTTPS / REST / JSON / TCP 8080 |
 | 9 | API Gateway → Notification Service | Передаёт REST-запросы и проксирует SSE | HTTPS / REST / JSON / SSE / TCP 8080 |
 | 10 | API Gateway → Analytics and Reporting Service | Передаёт запросы аналитики и отчётов | HTTPS / REST / JSON / TCP 8080 |
-| 11 | Employee Service → Employee DB Master | Читает и изменяет кадровые данные и outbox | PostgreSQL / TLS / TCP 5432 |
+| 11 | Employee Service → Employee DB Master | Читает и изменяет кадровые данные, данные локального входа и outbox | PostgreSQL / TLS / TCP 5432 |
 | 12 | Employee DB Master → Employee DB Standby | Передаёт WAL для асинхронной потоковой репликации | PostgreSQL replication / TLS / TCP 5432 |
 | 13 | Talent Service → Talent DB | Хранит данные развития, оценки, проекции и outbox | PostgreSQL / TLS / TCP 5432 |
 | 14 | Development Plan Service → Development Plan DB | Хранит планы, задания, проекции и outbox | PostgreSQL / TLS / TCP 5432 |
 | 15 | Notification Service → Notification DB | Хранит уведомления, настройки и задания доставки | PostgreSQL / TLS / TCP 5432 |
 | 16 | Analytics and Reporting Service → Analytics DB | Хранит собственные аналитические проекции | PostgreSQL / TLS / TCP 5432 |
-| 17 | Employee Service → Kafka | Публикует кадровые события через outbox | Kafka protocol / TLS / TCP 9092 |
+| 17 | Employee Service → Kafka | Публикует кадровые события и события для отправки писем активации и подтверждения контактов | Kafka protocol / TLS / TCP 9092 |
 | 18 | Talent Service → Kafka | Публикует события через outbox и получает события платформы | Kafka protocol / TLS / TCP 9092 |
 | 19 | Development Plan Service → Kafka | Публикует события через outbox и получает события платформы | Kafka protocol / TLS / TCP 9092 |
-| 20 | Notification Service → Kafka | Получает события для формирования уведомлений | Kafka protocol / TLS / TCP 9092 |
+| 20 | Notification Service → Kafka | Получает события для уведомлений и служебных писем | Kafka protocol / TLS / TCP 9092 |
 | 21 | Analytics and Reporting Service → Kafka | Получает события для обновления аналитических проекций | Kafka protocol / TLS / TCP 9092 |
 | 22 | Employee Service → Object Storage | Сохраняет и получает аватары | S3 API / HTTPS / TCP 9000 |
 | 23 | Development Plan Service → Object Storage | Сохраняет и получает вложения заданий | S3 API / HTTPS / TCP 9000 |

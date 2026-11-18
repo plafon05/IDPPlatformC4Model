@@ -1,6 +1,7 @@
 @startuml HRIS_Import_Service_L4
 
-title Диаграмма классов UML (Level 4: Code — Go)\nКомпонент: HRIS Import Service 
+title Диаграмма классов UML (Level 4: Code — Go)\nКомпонент: HRIS Import Service
+
 skinparam classAttributeIconSize 0
 skinparam packageStyle rectangle
 skinparam class {
@@ -13,7 +14,6 @@ package "Domain Contracts (Go Models)" #F9F9F9 {
     enum TargetService <<type string>> {
         TargetEmployee = "EMPLOYEE"
         TargetOrganization = "ORGANIZATION"
-        TargetRole = "ROLE"
     }
 
     class ChangeRecord <<struct>> {
@@ -42,10 +42,6 @@ package "Ports (Go Interfaces — DIP)" #FEFDFB {
     interface OrganizationServicePort <<interface>> {
         + {abstract} ProcessOrganizationUpdate(ctx: context.Context, entityID: string, data: map[string]any): error
     }
-
-    interface RoleServicePort <<interface>> {
-        + {abstract} ProcessRoleUpdate(ctx: context.Context, entityID: string, data: map[string]any): error
-    }
 }
 
 package "Application Layer (Go Use Cases & Strategies)" #F0F4F8 {
@@ -69,7 +65,7 @@ package "Application Layer (Go Use Cases & Strategies)" #F0F4F8 {
 
     class StrategyRegistry <<struct>> {
         - strategies: map[TargetService]ChangeDispatchStrategy
-        + Register(strategy: ChangeDispatchStrategy): void
+        + Register(strategy: ChangeDispatchStrategy)
         + Get(target: TargetService): (ChangeDispatchStrategy, error)
     }
 
@@ -89,39 +85,31 @@ package "Application Layer (Go Use Cases & Strategies)" #F0F4F8 {
         + TargetService(): TargetService
         + Dispatch(ctx: context.Context, change: ChangeRecord): error
     }
-
-    class RoleDispatchStrategy <<struct>> {
-        - port: RoleServicePort
-        + TargetService(): TargetService
-        + Dispatch(ctx: context.Context, change: ChangeRecord): error
-    }
 }
 
-' Отношения реализации интерфейсов стратегий (Realization)
+' Реализация интерфейса стратегий
 ChangeDispatchStrategy <|.. EmployeeDispatchStrategy
 ChangeDispatchStrategy <|.. OrganizationDispatchStrategy
-ChangeDispatchStrategy <|.. RoleDispatchStrategy
 
-' Стратегии вызывают порты целевых сервисов (DIP)
-EmployeeDispatchStrategy --> EmployeeServicePort : передаёт изменения
-OrganizationDispatchStrategy --> OrganizationServicePort : передаёт изменения
-RoleDispatchStrategy --> RoleServicePort : передаёт изменения
+' Передача кадровых изменений компонентам Employee Service
+EmployeeDispatchStrategy --> EmployeeServicePort : передаёт изменения данных сотрудников
+OrganizationDispatchStrategy --> OrganizationServicePort : передаёт изменения подразделений,\nдолжностей и подчинённости
 
-' Use Cases взаимодействуют через порты и реестр
-FetchHRISDataUseCase --> HRISClientPort : опрашивает внешнюю HRIS
+' Получение и применение изменений
+FetchHRISDataUseCase --> HRISClientPort : запрашивает изменения из HRIS
 FetchHRISDataUseCase --> SyncStatePort : читает контрольную точку
-ApplyHRISDataUseCase --> SyncStatePort : фиксирует контрольную точку
-ApplyHRISDataUseCase --> StrategyRegistry : запрашивает стратегию по TargetService
+ApplyHRISDataUseCase --> SyncStatePort : сохраняет контрольную точку\nпосле успешной обработки
+ApplyHRISDataUseCase --> StrategyRegistry : выбирает стратегию по TargetService
 
 StrategyRegistry "1" o-- "*" ChangeDispatchStrategy : хранит зарегистрированные стратегии
 
-' Сервис оркестрирует Юзкейсы
-HRISImportService *-- FetchHRISDataUseCase : оркестрирует
-HRISImportService *-- ApplyHRISDataUseCase : оркестрирует
+' Управление циклом импорта
+HRISImportService *-- FetchHRISDataUseCase : запускает получение изменений
+HRISImportService *-- ApplyHRISDataUseCase : запускает применение изменений
 
-' Связи с доменной моделью ChangeRecord
+' Модель кадрового изменения
 ChangeDispatchStrategy ..> ChangeRecord : обрабатывает
 HRISClientPort ..> ChangeRecord : возвращает
-ChangeRecord --> TargetService : типизирован
+ChangeRecord --> TargetService : определяет получателя изменения
 
 @enduml

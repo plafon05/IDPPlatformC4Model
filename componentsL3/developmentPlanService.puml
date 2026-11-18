@@ -6,89 +6,124 @@ title IDP Platform — Development Plan Service — диаграмма комп�
 
 LAYOUT_TOP_DOWN()
 
+skinparam linetype ortho
+skinparam nodesep 100
+skinparam ranksep 200
+
+' Цвет связи соответствует её исходному компоненту.
+AddRelTag("from_gateway", $lineColor="#B22222", $textColor="#B22222")
+AddRelTag("from_talentService", $lineColor="#0066CC", $textColor="#0066CC")
+AddRelTag("from_eventStreams", $lineColor="#8A2BE2", $textColor="#8A2BE2")
+AddRelTag("from_developmentApi", $lineColor="#008066", $textColor="#008066")
+AddRelTag("from_eventConsumer", $lineColor="#D2691E", $textColor="#D2691E")
+AddRelTag("from_reminderWorker", $lineColor="#B03060", $textColor="#B03060")
+AddRelTag("from_outboxWorker", $lineColor="#477500", $textColor="#477500")
+AddRelTag("from_assessmentAppService", $lineColor="#007C91", $textColor="#007C91")
+AddRelTag("from_planAppService", $lineColor="#7A4B00", $textColor="#7A4B00")
+AddRelTag("from_templateAppService", $lineColor="#5546A5", $textColor="#5546A5")
+AddRelTag("from_adaptationAppService", $lineColor="#C14500", $textColor="#C14500")
+AddRelTag("from_projectionAppService", $lineColor="#24734B", $textColor="#24734B")
+AddRelTag("from_reminderAppService", $lineColor="#AA3377", $textColor="#AA3377")
+AddRelTag("from_outboxPublishService", $lineColor="#336699", $textColor="#336699")
+AddRelTag("from_templateRepo", $lineColor="#866600", $textColor="#866600")
+AddRelTag("from_planRepo", $lineColor="#875692", $textColor="#875692")
+AddRelTag("from_assessmentRepo", $lineColor="#007C80", $textColor="#007C80")
+AddRelTag("from_adaptationRepo", $lineColor="#BD4A53", $textColor="#BD4A53")
+AddRelTag("from_projectionRepo", $lineColor="#496A26", $textColor="#496A26")
+AddRelTag("from_reminderRepo", $lineColor="#7259A3", $textColor="#7259A3")
+AddRelTag("from_outboxRepo", $lineColor="#BA6500", $textColor="#BA6500")
+AddRelTag("from_attachmentStorage", $lineColor="#006EAD", $textColor="#006EAD")
+AddRelTag("from_kafkaProducer", $lineColor="#B22222", $textColor="#B22222")
+
 System_Boundary(idpPlatform, "IDP Platform") {
 
     Container(gateway, "API Gateway", "Go", "Маршрутизирует запросы, проверяет токены и ограничивает частоту запросов.")
-    ContainerQueue(eventStreams, "Брокер событий", "Apache Kafka", "Передаёт кадровые события, изменения компетенций и события развития между сервисами.")
+    Container(talentService, "Talent Service", "Go", "Проводит тестирование, публикует итоговые результаты тестов и формирует рекомендации по развитию.")
+    ContainerQueue(eventStreams, "Брокер событий", "Apache Kafka", "Передаёт кадровые события, события развития и итоговые результаты тестов.")
 
     Container_Boundary(developmentService, "Development Plan Service") {
 
         together {
-            Component(developmentApi, "Development API Controller", "Go / HTTP Handler", "Принимает REST-запросы по ИПР, задачам, оценкам, адаптации и шаблонам и передаёт их прикладным сервисам.")
-            Component(eventConsumer, "Kafka Event Consumer", "Go / Kafka Client", "Получает кадровые события и изменения компетенций из Apache Kafka.")
-            Component(reminderWorker, "Reminder Worker", "Go Background Worker", "По расписанию запускает цикл формирования напоминаний о сроках задач.")
+            Component(developmentApi, "Development API Controller", "Go / HTTP Handler", "Принимает запросы по библиотеке ПР, ИПР, заданиям и адаптации. Предоставляет Talent Service доступные ПР и задания для рекомендаций с учётом прав пользователя.")
+            Component(eventConsumer, "Kafka Event Consumer", "Go / Kafka Client", "Получает кадровые события, изменения компетенций и итоговые результаты тестов для заданий ИПР.")
+            Component(reminderWorker, "Reminder Worker", "Go Background Worker", "По расписанию запускает проверку сроков заданий и этапов.")
             Component(outboxWorker, "Outbox Publishing Worker", "Go Background Worker", "По расписанию запускает цикл публикации событий outbox.")
         }
 
         together {
-            Component(templateAppService, "Template Service", "Go Application Service", "Реализует операции с шаблонами ИПР и программ адаптации.")
-            Component(planAppService, "Development Plan Service", "Go Application Service", "Реализует операции с ИПР и задачами: создание по шаблону, согласование руководителем и закрытие плана.")
-            Component(assessmentAppService, "Assessment & Comment Service", "Go Application Service", "Реализует оценку выполнения задач, комментарии и работу с вложениями.")
+            Component(templateAppService, "Template Service", "Go Application Service", "Ведёт личный архив и общую библиотеку ПР. Управляет публикацией, версиями и доступом к ПР, а также шаблонами адаптации.")
+            Component(planAppService, "Development Plan Service", "Go Application Service", "Создаёт ИПР с нуля или как отдельную копию выбранной версии ПР. Назначает и завершает планы, учитывает итоги тестов по критериям заданий, пересчитывает взвешенный прогресс и проверяет условия контрольных точек.")
+            Component(assessmentAppService, "Assessment & Comment Service", "Go Application Service", "Регистрирует решения о выполнении заданий, комментарии и подтверждающие вложения.")
             Component(adaptationAppService, "Adaptation Service", "Go Application Service", "Создаёт программы адаптации новых сотрудников по шаблонам и отслеживает их прохождение.")
             Component(projectionAppService, "Development Projection Service", "Go Application Service", "Обновляет локальные проекции сотрудников, оргструктуры, ролей и компетенций по событиям других сервисов.")
-            Component(reminderAppService, "Reminder Service", "Go Application Service", "Находит задачи с приближающимся сроком и формирует события напоминаний.")
-            Component(outboxPublishService, "Outbox Publication Service", "Go Application Service", "Получает pending-события, публикует их и фиксирует результат.")
+            Component(reminderAppService, "Reminder Service", "Go Application Service", "Формирует события о приближении срока и просрочке заданий и этапов. Пересчитывает будущие напоминания при переносе срока.")
+            Component(outboxPublishService, "Outbox Publication Service", "Go Application Service", "Получает неопубликованные события, публикует их и фиксирует результат.")
         }
 
         together {
-            Component(templateRepo, "Template Repository", "Go / pgx", "Читает и сохраняет шаблоны ИПР и адаптации.")
-            Component(planRepo, "Plan Repository", "Go / pgx", "Читает и сохраняет планы и задачи и записывает их события в outbox в той же транзакции.")
-            Component(assessmentRepo, "Assessment Repository", "Go / pgx", "Сохраняет оценки и комментарии и записывает их события в outbox в той же транзакции.")
+            Component(templateRepo, "Template Repository", "Go / pgx", "Читает и сохраняет версии ПР, данные публикации и шаблоны адаптации.")
+            Component(planRepo, "Plan Repository", "Go / pgx", "Читает и сохраняет планы, задания, результаты тестовых заданий и контрольные точки. Записывает их события в outbox в той же транзакции.")
+            Component(assessmentRepo, "Assessment Repository", "Go / pgx", "Сохраняет результаты проверки заданий и комментарии, записывает их события в outbox в той же транзакции.")
             Component(adaptationRepo, "Adaptation Repository", "Go / pgx", "Сохраняет программы адаптации и записывает их события в outbox в той же транзакции.")
             Component(projectionRepo, "Projection Repository", "Go / pgx", "Читает и сохраняет локальные проекции сотрудников, оргструктуры, ролей и компетенций.")
-            Component(reminderRepo, "Reminder Repository", "Go / pgx", "Выбирает задачи с приближающимся сроком, фиксирует напоминания и записывает их события в outbox.")
-            Component(outboxRepo, "Outbox Repository", "Go / pgx", "Выдаёт pending-события и отмечает опубликованные.")
+            Component(reminderRepo, "Reminder Repository", "Go / pgx", "Читает сроки заданий и этапов, обновляет расписание напоминаний и записывает события в outbox.")
+            Component(outboxRepo, "Outbox Repository", "Go / pgx", "Выдаёт неопубликованные события и отмечает опубликованные.")
             Component(attachmentStorage, "Attachment Storage Adapter", "Go / S3 Client", "Сохраняет, получает и удаляет вложения в MinIO.")
             Component(kafkaProducer, "Kafka Producer", "Go / Kafka Client", "Публикует события ИПР, адаптации и напоминаний в Apache Kafka.")
         }
     }
 
-    ContainerDb(developmentDb, "Development Plan DB", "PostgreSQL", "Хранит планы, задачи, оценки, комментарии, шаблоны, напоминания, проекции и outbox.")
-    ContainerDb(objectStorage, "Object Storage", "MinIO", "Хранит вложения к задачам ИПР.")
+    ContainerDb(developmentDb, "Development Plan DB", "PostgreSQL", "Хранит версии ПР, ИПР, задания, результаты проверки, контрольные точки, комментарии, шаблоны адаптации, напоминания, проекции и outbox.")
+    ContainerDb(objectStorage, "Object Storage", "MinIO", "Хранит вложения к заданиям ИПР.")
 }
 
-Rel(gateway, developmentApi, "Передаёт запросы ИПР и адаптации", "HTTPS / REST / JSON")
-Rel(eventStreams, eventConsumer, "Передаёт кадровые события и изменения компетенций", "Kafka protocol / TLS")
+' Входящие запросы и события
+Rel_D(gateway, developmentApi, "Передаёт запросы по ПР, ИПР,\nзаданиям и адаптации", "HTTPS / REST / JSON", $tags="from_gateway")
+Rel_D(talentService, developmentApi, "Запрашивает доступные ПР и\nзадания для рекомендаций", "HTTPS / REST / JSON", $tags="from_talentService")
+Rel_D(eventStreams, eventConsumer, "Передаёт кадровые события,\nизменения компетенций и\nитоговые результаты тестов для\nИПР", "Kafka protocol / TLS", $tags="from_eventStreams")
 
-Rel(developmentApi, templateAppService, "Операции с шаблонами", "Go Call")
-Rel(developmentApi, planAppService, "Операции с ИПР и задачами", "Go Call")
-Rel(developmentApi, assessmentAppService, "Оценки, комментарии и вложения", "Go Call")
-Rel(developmentApi, adaptationAppService, "Операции с адаптацией", "Go Call")
+' Обработка запросов и событий внутри контейнера
+Rel_D(developmentApi, templateAppService, "Поиск, публикация и управление\nверсиями ПР и шаблонами\nадаптации", "Go Call", $tags="from_developmentApi")
+Rel_D(developmentApi, planAppService, "Операции с ИПР и заданиями", "Go Call", $tags="from_developmentApi")
+Rel_D(developmentApi, assessmentAppService, "Проверка заданий, комментарии\nи вложения", "Go Call", $tags="from_developmentApi")
+Rel_D(developmentApi, adaptationAppService, "Операции с адаптацией", "Go Call", $tags="from_developmentApi")
 
-Rel(eventConsumer, adaptationAppService, "Передаёт событие приёма сотрудника", "Go Call")
-Rel(eventConsumer, projectionAppService, "Передаёт изменения сотрудников, оргструктуры, ролей и компетенций", "Go Call")
+Rel_D(eventConsumer, adaptationAppService, "Передаёт событие приёма\nсотрудника", "Go Call", $tags="from_eventConsumer")
+Rel_D(eventConsumer, projectionAppService, "Передаёт изменения\nсотрудников, оргструктуры,\nролей и компетенций", "Go Call", $tags="from_eventConsumer")
+Rel_D(eventConsumer, planAppService, "Передаёт итоговый результат\nтеста, связанного с заданием\nИПР", "Go Call", $tags="from_eventConsumer")
 
-Rel(reminderWorker, reminderAppService, "Запускает цикл напоминаний", "Go Call")
-Rel(outboxWorker, outboxPublishService, "Запускает цикл публикации", "Go Call")
+Rel_D(reminderWorker, reminderAppService, "Запускает цикл напоминаний", "Go Call", $tags="from_reminderWorker")
+Rel_D(outboxWorker, outboxPublishService, "Запускает цикл публикации", "Go Call", $tags="from_outboxWorker")
+Rel_L(assessmentAppService, planAppService, "Передаёт решение руководителя\nдля обновления статуса задания\nи прогресса", "Go Call", $tags="from_assessmentAppService")
+Rel_R(planAppService, reminderAppService, "Передаёт изменения сроков\nзаданий и этапов", "Go Call", $tags="from_planAppService")
 
-Rel(templateAppService, templateRepo, "Читает и сохраняет шаблоны", "Go Call")
-Rel(planAppService, templateRepo, "Получает шаблон ИПР", "Go Call")
-Rel(planAppService, planRepo, "Читает и сохраняет планы и задачи", "Go Call")
-Rel(planAppService, projectionRepo, "Получает данные сотрудников, руководителей и компетенций", "Go Call")
+' Репозитории и адаптеры
+Rel_D(templateAppService, templateRepo, "Читает и сохраняет версии ПР и\nшаблоны адаптации", "Go Call", $tags="from_templateAppService")
+Rel_D(planAppService, templateRepo, "Получает выбранную версию ПР\nдля создания ИПР", "Go Call", $tags="from_planAppService")
+Rel_D(planAppService, planRepo, "Читает и сохраняет планы,\nзадания, результаты и\nконтрольные точки", "Go Call", $tags="from_planAppService")
+Rel_D(planAppService, projectionRepo, "Получает данные сотрудников,\nруководителей и компетенций", "Go Call", $tags="from_planAppService")
+Rel_D(assessmentAppService, assessmentRepo, "Сохраняет результаты проверки\nи комментарии", "Go Call", $tags="from_assessmentAppService")
+Rel_D(assessmentAppService, attachmentStorage, "Работает с вложениями", "Go Call", $tags="from_assessmentAppService")
+Rel_D(adaptationAppService, templateRepo, "Получает шаблон программы\nадаптации", "Go Call", $tags="from_adaptationAppService")
+Rel_D(adaptationAppService, adaptationRepo, "Читает и сохраняет программы\nадаптации", "Go Call", $tags="from_adaptationAppService")
+Rel_D(projectionAppService, projectionRepo, "Обновляет локальные проекции", "Go Call", $tags="from_projectionAppService")
+Rel_D(reminderAppService, reminderRepo, "Получает сроки заданий и\nэтапов, обновляет напоминания", "Go Call", $tags="from_reminderAppService")
+Rel_D(outboxPublishService, outboxRepo, "Читает неопубликованные\nсобытия и фиксирует результат", "Go Call", $tags="from_outboxPublishService")
+Rel_D(outboxPublishService, kafkaProducer, "Передаёт событие на публикацию", "Go Call", $tags="from_outboxPublishService")
 
-Rel(assessmentAppService, assessmentRepo, "Сохраняет оценки и комментарии", "Go Call")
-Rel(assessmentAppService, attachmentStorage, "Работает с вложениями", "Go Call")
+' База данных, хранилище и брокер
+Rel_D(templateRepo, developmentDb, "Версии ПР и шаблоны адаптации", "PostgreSQL / TLS", $tags="from_templateRepo")
+Rel_D(planRepo, developmentDb, "Планы, задания, результаты\nтестовых заданий, контрольные\nточки и outbox", "PostgreSQL / TLS", $tags="from_planRepo")
+Rel_D(assessmentRepo, developmentDb, "Результаты проверки,\nкомментарии и outbox", "PostgreSQL / TLS", $tags="from_assessmentRepo")
+Rel_D(adaptationRepo, developmentDb, "Программы адаптации и outbox", "PostgreSQL / TLS", $tags="from_adaptationRepo")
+Rel_D(projectionRepo, developmentDb, "Проекции", "PostgreSQL / TLS", $tags="from_projectionRepo")
+Rel_D(reminderRepo, developmentDb, "Напоминания и outbox", "PostgreSQL / TLS", $tags="from_reminderRepo")
+Rel_D(outboxRepo, developmentDb, "Outbox", "PostgreSQL / TLS", $tags="from_outboxRepo")
+Rel_D(attachmentStorage, objectStorage, "Работает с файлами вложений", "S3 API / HTTPS", $tags="from_attachmentStorage")
+Rel_R(kafkaProducer, eventStreams, "Публикует события развития и\nнапоминаний", "Kafka protocol / TLS", $tags="from_kafkaProducer")
 
-Rel(adaptationAppService, templateRepo, "Получает шаблон программы адаптации", "Go Call")
-Rel(adaptationAppService, adaptationRepo, "Читает и сохраняет программы адаптации", "Go Call")
-
-Rel(projectionAppService, projectionRepo, "Обновляет локальные проекции", "Go Call")
-
-Rel(reminderAppService, reminderRepo, "Получает задачи и фиксирует напоминания", "Go Call")
-
-Rel(outboxPublishService, outboxRepo, "Читает pending и фиксирует результат", "Go Call")
-Rel(outboxPublishService, kafkaProducer, "Передаёт событие на публикацию", "Go Call")
-
-Rel(templateRepo, developmentDb, "Шаблоны", "PostgreSQL / TLS")
-Rel(planRepo, developmentDb, "Планы, задачи и outbox", "PostgreSQL / TLS")
-Rel(assessmentRepo, developmentDb, "Оценки, комментарии и outbox", "PostgreSQL / TLS")
-Rel(adaptationRepo, developmentDb, "Программы адаптации и outbox", "PostgreSQL / TLS")
-Rel(projectionRepo, developmentDb, "Проекции", "PostgreSQL / TLS")
-Rel(reminderRepo, developmentDb, "Напоминания и outbox", "PostgreSQL / TLS")
-Rel(outboxRepo, developmentDb, "Outbox", "PostgreSQL / TLS")
-
-Rel(attachmentStorage, objectStorage, "Работает с файлами вложений", "S3 API / HTTPS")
-Rel(kafkaProducer, eventStreams, "Публикует события развития и напоминаний", "Kafka protocol / TLS")
-
+' Цвета связей сохранены, но их служебные теги исключены из легенды.
+!$tagCustomLegend = ""
 SHOW_LEGEND()
+
 @enduml

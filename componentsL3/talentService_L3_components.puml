@@ -6,81 +6,114 @@ title IDP Platform — диаграмма компонентов\nКонтейн
 
 LAYOUT_TOP_DOWN()
 
+' Ломаные линии и место для подписей между слоями.
+skinparam linetype polyline
+skinparam nodesep 140
+skinparam ranksep 90
+skinparam ArrowFontSize 11
+
 ' ---------- Теги слоёв ----------
 AddElementTag("presentation", $bgColor="#1168BD", $fontColor="#FFFFFF", $borderColor="#0B4884", $legendText="Presentation Layer (входные адаптеры)")
-AddElementTag("application",  $bgColor="#2E8B57", $fontColor="#FFFFFF", $borderColor="#1F6B40", $legendText="Application Layer (сценарии использования)")
-AddElementTag("domain",       $bgColor="#B8860B", $fontColor="#FFFFFF", $borderColor="#8A650A", $legendText="Domain Layer (бизнес-правила)")
-AddElementTag("infra",        $bgColor="#7B5EA7", $fontColor="#FFFFFF", $borderColor="#58427C", $legendText="Infrastructure Layer (выходные адаптеры)")
-AddElementTag("supporting",   $bgColor="#EEEEEE", $fontColor="#333333", $borderColor="#999999", $legendText="Связанные контейнеры")
-AddElementTag("db",           $bgColor="#1167bd85", $fontColor="#FFFFFF", $borderColor="#0B4884", $legendText="Контейнеры платформы вне фокуса")
+AddElementTag("application", $bgColor="#2E8B57", $fontColor="#FFFFFF", $borderColor="#1F6B40", $legendText="Application Layer (сценарии использования)")
+AddElementTag("domain", $bgColor="#B8860B", $fontColor="#FFFFFF", $borderColor="#8A650A", $legendText="Domain Layer (бизнес-правила)")
+AddElementTag("infra", $bgColor="#7B5EA7", $fontColor="#FFFFFF", $borderColor="#58427C", $legendText="Infrastructure Layer (выходные адаптеры)")
+AddElementTag("supporting", $bgColor="#EEEEEE", $fontColor="#333333", $borderColor="#999999", $legendText="Связанные контейнеры")
+AddElementTag("db", $bgColor="#1167BD", $fontColor="#FFFFFF", $borderColor="#0B4884", $legendText="База данных Talent Service")
 
 ' ---------- Окружение Talent Service ----------
 Container(gateway, "API Gateway", "Go", "Проверяет токены и маршрутизирует запросы.", $baseShape="hexagon", $tags="supporting")
-
+Container(developmentService, "Development Plan Service", "Go", "Управляет библиотекой ПР, ведёт ИПР и учитывает результаты тестов при проверке заданий.", $tags="supporting")
 System_Ext(lms, "LMS / Обучающая платформа", "Предоставляет курсы и результаты обучения.")
 
-' ---------- Ключевой контейнер ----------
-Container_Boundary(talentService, "Talent Service — единый процесс Go (общее адресное пространство)") {
+' ---------- Компоненты Talent Service ----------
+Container_Boundary(talentService, "Talent Service — единый процесс Go") {
 
     Boundary(presentationLayer, "Presentation Layer") {
-        Component(restApi, "REST API Handlers", "Go, HTTP router", "Принимает запросы от API Gateway, берёт идентификатор и роль пользователя из контекста запроса, валидирует вход, преобразует DTO в команды и запросы, формирует HTTP-ответы и коды ошибок.", $tags="presentation")
-        Component(eventConsumer, "Event Consumer", "Go, Kafka consumer", "Читает события из Kafka, десериализует и проверяет схему сообщений, передаёт их на обработку. Не содержит бизнес-логики.", $tags="presentation")
+        Component(restApi, "REST API Handlers", "Go, HTTP router", "Принимает запросы от API Gateway, получает идентификатор и роль пользователя из контекста, валидирует запросы и формирует HTTP-ответы.", $tags="presentation")
+        Component(eventConsumer, "Event Consumer", "Go, Kafka consumer", "Читает события из Kafka, проверяет схему сообщений и передаёт их на обработку.", $tags="presentation")
     }
 
     Boundary(applicationLayer, "Application Layer") {
-        Component(competencySvc, "Competency Service", "Go package", "Сценарии: ведение справочника компетенций и уровней, оценка компетенций сотрудника руководителем, самооценка.", $tags="application")
-        Component(careerSvc, "Career Model Service", "Go package", "Сценарии: ведение карьерных моделей, ролей и их требований к компетенциям, определение целевых ролей сотрудника.", $tags="application")
-        Component(learningSvc, "Learning Service", "Go package", "Сценарии: каталог обучения, синхронизация курсов и результатов из LMS, учёт обучения сотрудника.", $tags="application")
-        Component(reserveSvc, "Talent Reserve Service", "Go package", "Сценарии: ведение кадрового резерва, включение и исключение кандидатов, оценка готовности к целевой роли.", $tags="application")
-        Component(profileSvc, "Talent Profile Service", "Go package", "Сценарии: сборка Talent Profile сотрудника, запрос расчёта Skill Gap и рекомендаций по развитию.", $tags="application")
-        Component(projectionSvc, "Projection Sync Service", "Go package", "Сценарии: идемпотентное обновление локальных проекций (сотрудники, оргструктура) по входящим событиям.", $tags="application")
+        Component(competencySvc, "Competency Service", "Go package", "Ведёт справочник компетенций и уровней. Хранит самооценку отдельно от оценки руководителя и учитывает статус подтверждения новых уровней.", $tags="application")
+        Component(testing, "Testing", "Go package", "Создаёт и версионирует тесты, ведёт личный архив и общую базу. Закрепляет версию при назначении, контролирует срок и длительность попытки, сохраняет ответы и результаты автоматической и ручной проверки.", $tags="application")
+        Component(careerSvc, "Career Model Service", "Go package", "Ведёт карьерные модели, профили должностей и требования к компетенциям. Хранит целевой профиль сотрудника.", $tags="application")
+        Component(learningSvc, "Learning Service", "Go package", "Ведёт каталог обучения, синхронизирует курсы и результаты из LMS, учитывает обучение сотрудника.", $tags="application")
+        Component(reserveSvc, "Talent Reserve Service", "Go package", "Ведёт кадровый резерв, оформляет включение и исключение кандидатов, оценивает готовность к целевой роли.", $tags="application")
+        Component(profileSvc, "Talent Profile Service", "Go package", "Собирает Talent Profile, запрашивает расчёт Skill Gap и подбирает рекомендации из доступных пользователю материалов.", $tags="application")
+        Component(projectionSvc, "Projection Sync Service", "Go package", "Идемпотентно обновляет локальные проекции сотрудников и оргструктуры по входящим событиям.", $tags="application")
     }
 
     Boundary(domainLayer, "Domain Layer") {
-        Component(domainModel, "Domain Model", "Go package", "Агрегаты и сущности: Competency, CareerModel, CareerRole, LearningRecord, ReserveEntry, TalentProfile. Инварианты, доменные события, интерфейсы репозиториев (порты).", $tags="domain")
-        Component(gapEngine, "Skill Gap & Recommendation Engine", "Go package", "Доменные сервисы без ввода-вывода: расчёт Skill Gap (требования роли против фактических уровней), ранжирование курсов для рекомендаций.", $tags="domain")
+        Component(domainModel, "Domain Model", "Go package", "Содержит модели компетенций, оценок, тестов, карьерных профилей, обучения и кадрового резерва, а также их бизнес-правила.", $tags="domain")
+        Component(gapEngine, "Skill Gap & Recommendation Engine", "Go package", "Сравнивает окончательные уровни с требованиями текущего или целевого профиля. Отдельно отмечает неоценённые компетенции. По дефицитам подбирает ПР, задания и курсы LMS, если её каталог доступен.", $tags="domain")
     }
 
     Boundary(infraLayer, "Infrastructure Layer") {
-        Component(repository, "Talent Repository", "Go, pgx", "Реализует репозитории и транзакции. Сохраняет изменения агрегатов и доменные события (outbox) в одной транзакции. Хранит проекции.", $tags="infra")
-        Component(lmsClient, "LMS Client", "Go, HTTP client", "Адаптер к REST API LMS (anti-corruption layer): маппинг моделей LMS, таймауты, повторы, circuit breaker.", $tags="infra")
-        Component(outboxRelay, "Outbox Relay", "Go, фоновый воркер", "Вычитывает неотправленные записи outbox, публикует их в Kafka, помечает отправленными (доставка at-least-once).", $tags="infra")
+        Component(repository, "Talent Repository", "Go, pgx", "Реализует репозитории и транзакции. Сохраняет данные и записи outbox в одной транзакции, хранит локальные проекции.", $tags="infra")
+        Component(planCatalogClient, "Plan Catalog Client", "Go, HTTP client", "Запрашивает доступные пользователю ПР и задания из библиотеки.", $tags="infra")
+        Component(lmsClient, "LMS Client", "Go, HTTP client", "Получает данные через REST API LMS и преобразует их в модели платформы.", $tags="infra")
+        Component(outboxRelay, "Outbox Relay", "Go, фоновый воркер", "Читает неотправленные записи outbox, публикует их в Kafka и отмечает отправленными.", $tags="infra")
     }
 }
 
-' ---------- Внешние контейнеры ----------
-ContainerDb(talentDb, "Talent DB", "PostgreSQL", "Хранит компетенции, карьерные модели, обучение, кадровый резерв, проекции и outbox.", $tags="db")
+' ---------- База данных и брокер ----------
+ContainerDb(talentDb, "Talent DB", "PostgreSQL", "Хранит компетенции, оценки, версии тестов, назначения, попытки и результаты, карьерные модели, обучение, кадровый резерв, проекции и outbox.", $tags="db")
 ContainerQueue(eventStreams, "Брокер событий", "Apache Kafka", "Передаёт события между сервисами.", $tags="supporting")
 
 ' ---------- Вход в контейнер ----------
-Rel(gateway, restApi, "Запросы компетенций и карьеры", "HTTPS / REST / JSON")
-Rel(eventConsumer, eventStreams, "Читает события развития", "Kafka protocol / TLS")
+Rel_D(gateway, restApi, "Передаёт запросы по компетенциям,\nоценкам, тестам и карьере", "HTTPS / REST / JSON")
+' Длинная связь с брокером не влияет на порядок слоёв.
+eventConsumer -[norank]-> eventStreams : Читает события платформы\n[Kafka protocol / TLS]
 
 ' ---------- Presentation -> Application ----------
-Rel(restApi, competencySvc, "Команды и запросы", "CompetencyUseCases")
-Rel(restApi, careerSvc, "Команды и запросы", "CareerModelUseCases")
-Rel(restApi, learningSvc, "Команды и запросы", "LearningUseCases")
-Rel(restApi, reserveSvc, "Команды и запросы", "ReserveUseCases")
-Rel(restApi, profileSvc, "Запросы профиля", "ProfileUseCases")
-Rel(eventConsumer, projectionSvc, "Передаёт события", "ProjectionUseCases")
+Rel_D(restApi, competencySvc, "Передаёт запросы и команды по\nкомпетенциям и оценкам", "Go call")
+Rel_D(restApi, testing, "Передаёт запросы по тестам,\nназначениям, попыткам и проверке\nответов", "Go call")
+Rel_D(restApi, careerSvc, "Передаёт запросы и команды по\nкарьерным моделям", "Go call")
+Rel_D(restApi, learningSvc, "Передаёт запросы и команды по\nобучению", "Go call")
+Rel_D(restApi, reserveSvc, "Передаёт запросы и команды по\nкадровому резерву", "Go call")
+Rel_D(restApi, profileSvc, "Передаёт запросы профиля развития", "Go call")
+Rel_D(eventConsumer, projectionSvc, "Передаёт кадровые события", "Go call")
+Rel_D(eventConsumer, competencySvc, "Передаёт события о срабатывании\nправил ИПР для обновления уровней", "Go call")
 
 ' ---------- Внутри Application Layer ----------
-Rel(reserveSvc, profileSvc, "Запрашивает Skill Gap кандидата", "ProfileUseCases")
+Rel_R(reserveSvc, profileSvc, "Запрашивает Skill Gap кандидата", "Go call")
+Rel_R(profileSvc, learningSvc, "Получает доступные курсы LMS", "Go call")
 
 ' ---------- Application -> Domain ----------
-Rel(applicationLayer, domainModel, "Оперирует агрегатами, вызывает инварианты", "Go types")
-Rel(profileSvc, gapEngine, "Рассчитывает Skill Gap и рекомендации", "GapCalculator, Recommender")
-Rel(gapEngine, domainModel, "Использует модели и правила", "Go types")
+Rel_D(applicationLayer, domainModel, "Использует модели и бизнес-правила", "Go types")
+Rel_D(profileSvc, gapEngine, "Передаёт окончательные уровни,\nтребования профиля и варианты\nразвития", "Go call")
+Rel_R(gapEngine, domainModel, "Использует модели и правила\nрасчёта", "Go types")
 
-' ---------- Application -> Infrastructure (через порты) ----------
-Rel(applicationLayer, repository, "Читает и сохраняет агрегаты и проекции", "Repository ports")
-Rel(learningSvc, lmsClient, "Запрашивает курсы и результаты", "LearningCatalogPort")
+' ---------- Application -> Infrastructure ----------
+Rel_D(applicationLayer, repository, "Читает и сохраняет данные и\nпроекции", "Repository ports")
+Rel_D(testing, repository, "Сохраняет версии, назначения,\nответы и результаты. Записывает\nитоговое событие по тестовому\nзаданию ИПР в outbox", "Go call")
+Rel_D(profileSvc, planCatalogClient, "Получает доступные ПР и задания\nдля рекомендаций", "Go call")
+Rel_D(learningSvc, lmsClient, "Запрашивает курсы и результаты\nобучения", "Go call")
 
 ' ---------- Infrastructure -> внешние контейнеры ----------
-Rel(repository, talentDb, "Читает и изменяет данные и outbox", "PostgreSQL / TLS")
-Rel(lmsClient, lms, "Получает курсы и результаты обучения", "HTTPS / REST / JSON")
-Rel(outboxRelay, repository, "Читает пачку и отмечает отправленные", "OutboxStore")
-Rel(outboxRelay, eventStreams, "Публикует события развития", "Kafka protocol / TLS")
+Rel_D(repository, talentDb, "Читает и изменяет данные и outbox", "PostgreSQL / TLS")
+Rel_D(planCatalogClient, developmentService, "Запрашивает доступные ПР и задания\nс учётом прав пользователя", "HTTPS / REST / JSON")
+Rel_D(lmsClient, lms, "Получает курсы и результаты\nобучения", "HTTPS / REST / JSON")
+Rel_L(outboxRelay, repository, "Читает записи outbox и отмечает\nотправленные", "Go call")
+Rel_D(outboxRelay, eventStreams, "Публикует события развития и\nитоговые результаты тестов для\nзаданий ИПР", "Kafka protocol / TLS")
+developmentService -[norank]-> eventStreams : Получает итоговые результаты тестов\nдля проверки заданий ИПР\n[Kafka protocol / TLS]
+
+' ---------- Геометрия: слои сверху вниз, компоненты слева направо ----------
+presentationLayer -[hidden]down-> applicationLayer
+applicationLayer -[hidden]down-> domainLayer
+domainLayer -[hidden]down-> infraLayer
+
+restApi -[hidden]right-> eventConsumer
+testing -[hidden]right-> careerSvc
+careerSvc -[hidden]right-> reserveSvc
+reserveSvc -[hidden]right-> profileSvc
+profileSvc -[hidden]right-> learningSvc
+learningSvc -[hidden]right-> competencySvc
+competencySvc -[hidden]right-> projectionSvc
+gapEngine -[hidden]right-> domainModel
+repository -[hidden]right-> outboxRelay
+outboxRelay -[hidden]right-> planCatalogClient
+planCatalogClient -[hidden]right-> lmsClient
 
 SHOW_LEGEND()
 

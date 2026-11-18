@@ -3,8 +3,8 @@
 !include <C4/C4_Deployment>
 
 skinparam linetype ortho
-skinparam nodesep 90
-skinparam ranksep 110
+skinparam nodesep 95
+skinparam ranksep 115
 
 title IDP Platform — общая диаграмма развёртывания\nКорпоративный ЦОД / Private Cloud, локальный вход и подключаемый IAM / SSO
 
@@ -128,6 +128,7 @@ Deployment_Node(externalInfrastructure, "Смежная корпоративна
 
     Deployment_Node(iamHost, "Инфраструктура идентификации", "Корпоративный IAM / SSO") {
        System_Ext(iam, "Корпоративный IAM / SSO", "При подключении обеспечивает корпоративный вход по OIDC и предоставляет ключи проверки токенов.")
+    }
 
     Deployment_Node(hrisHost, "Инфраструктура кадровой системы", "Корпоративная HRIS") {
         System_Ext(hris, "HRIS / Кадровая система", "Источник сотрудников, подразделений, должностей и связей подчинённости.")
@@ -200,6 +201,7 @@ Rel_R(analyticsService, objectStorage, "24", $tags="s3")
 Rel_U(employeeService, hris, "25", $tags="ext")
 Rel_U(talentService, lms, "26", $tags="ext")
 Rel_U(notificationService, smtp, "27", $tags="ext")
+talentService -[norank]-> developmentService : 28
 
 ' Правила доступа
 
@@ -212,6 +214,7 @@ end note
 note bottom of applicationNetwork
 Сервисы проверяют права на операции и конкретные записи.
 Входящие соединения к API сервисов разрешены от Gateway.
+Talent Service также может обращаться к API каталога ПР в Development Plan Service.
 Фоновые обработчики выполняются внутри соответствующих сервисов.
 end note
 
@@ -258,6 +261,7 @@ note as LegendTable
 | 25 | Employee Service → HRIS | Синхронизирует сотрудников и оргструктуру | HTTPS / REST / JSON / TCP 443 |
 | 26 | Talent Service → LMS | Получает каталог курсов и результаты обучения | HTTPS / REST / JSON / TCP 443 |
 | 27 | Notification Service → SMTP | Передаёт email для доставки | SMTP / STARTTLS / TCP 587 |
+| 28 | Talent Service → Development Plan Service | Запрашивает доступные ПР и задания для рекомендаций | HTTPS / REST / JSON / TCP 8080 |
 
 |<color:#1f6feb>■</color> REST / HTTPS через Gateway|<color:#1a7f37>■</color> Доступ к БД и репликация|<color:#d9730d>■</color> Обмен событиями через Kafka|
 |<color:#8250df>■</color> Объектное хранилище (S3 API)|<color:#cf222e>■</color> Интеграции с внешними системами|<color:#57606a>■</color> Аутентификация (пунктир)|

@@ -55,16 +55,16 @@ jobs:
           if-no-files-found: error
 
       - name: Commit updated diagrams
-        if: github.event_name != 'pull_request' && github.ref_type == 'branch'
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         env:
           TARGET_BRANCH: ${{ github.ref_name }}
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A -- diagrams
           if git diff --cached --quiet; then
             echo 'Diagrams are already up to date.'
             exit 0
           fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m "Обновлены сгенерированные диаграммы"
           git push origin "HEAD:refs/heads/$TARGET_BRANCH"

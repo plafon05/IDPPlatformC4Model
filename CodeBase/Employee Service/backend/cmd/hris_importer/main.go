@@ -34,13 +34,6 @@ func (m *mockHRISClient) FetchChanges(ctx context.Context, since time.Time) ([]d
 			Data:          map[string]any{"dept_name": "Платформенная разработка", "head_id": "EMP-1001"},
 			Timestamp:     time.Now().Add(-5 * time.Minute),
 		},
-		{
-			RecordID:      "1C-ROLE-003",
-			TargetService: domain.TargetRole,
-			EntityID:      "EMP-1001",
-			Data:          map[string]any{"role": "TeamLead", "scope": "IDP_Core"},
-			Timestamp:     time.Now(),
-		},
 	}, nil
 }
 
@@ -71,13 +64,6 @@ func (m *mockOrganizationServicePort) ProcessOrganizationUpdate(ctx context.Cont
 	return nil
 }
 
-type mockRoleServicePort struct{}
-
-func (m *mockRoleServicePort) ProcessRoleUpdate(ctx context.Context, entityID string, data map[string]any) error {
-	fmt.Printf("    -> [Role Service Port] Назначена роль для %s: %+v\n", entityID, data)
-	return nil
-}
-
 func main() {
 	ctx := context.Background()
 
@@ -86,13 +72,11 @@ func main() {
 	syncState := &mockSyncState{checkpoint: time.Now().Add(-1 * time.Hour)}
 	empPort := &mockEmployeeServicePort{}
 	orgPort := &mockOrganizationServicePort{}
-	rolePort := &mockRoleServicePort{}
 
-	// 2. Инициализация реестра стратегий (папка strategy)
+	// 2. Инициализация реестра стратегий: 2 стратегии (Сотрудники и Оргструктура)
 	registry := strategy.NewStrategyRegistry()
 	registry.Register(strategy.NewEmployeeDispatchStrategy(empPort))
 	registry.Register(strategy.NewOrganizationDispatchStrategy(orgPort))
-	registry.Register(strategy.NewRoleDispatchStrategy(rolePort))
 
 	// 3. Инициализация Use Cases (папка usecase)
 	fetchUC := usecase.NewFetchHRISDataUseCase(syncState, hrisClient)

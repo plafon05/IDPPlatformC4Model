@@ -45,9 +45,17 @@ package "Ports (Go Interfaces — DIP)" #FEFDFB {
 }
 
 package "Application Layer (Go Use Cases & Strategies)" #F0F4F8 {
+    interface FetchDataUseCase <<interface>> {
+        + {abstract} Execute(ctx: context.Context): ([]ChangeRecord, error)
+    }
+
+    interface ApplyDataUseCase <<interface>> {
+        + {abstract} Execute(ctx: context.Context, changes: []ChangeRecord): error
+    }
+
     class HRISImportService <<struct>> {
-        - fetchUC: *FetchHRISDataUseCase
-        - applyUC: *ApplyHRISDataUseCase
+        - fetchUC: FetchDataUseCase
+        - applyUC: ApplyDataUseCase
         + RunImportCycle(ctx: context.Context): error
     }
 
@@ -91,23 +99,25 @@ package "Application Layer (Go Use Cases & Strategies)" #F0F4F8 {
 ChangeDispatchStrategy <|.. EmployeeDispatchStrategy
 ChangeDispatchStrategy <|.. OrganizationDispatchStrategy
 
-' Передача кадровых изменений компонентам Employee Service
+' Передача кадровых изменений
 EmployeeDispatchStrategy --> EmployeeServicePort : передаёт изменения данных сотрудников
-OrganizationDispatchStrategy --> OrganizationServicePort : передаёт изменения подразделений,\nдолжностей и подчинённости
+OrganizationDispatchStrategy --> OrganizationServicePort : передаёт изменения оргструктуры
 
 ' Получение и применение изменений
-FetchHRISDataUseCase --> HRISClientPort : запрашивает изменения из HRIS
+FetchHRISDataUseCase --> HRISClientPort : опрашивает внешнюю HRIS
 FetchHRISDataUseCase --> SyncStatePort : читает контрольную точку
-ApplyHRISDataUseCase --> SyncStatePort : сохраняет контрольную точку\nпосле успешной обработки
-ApplyHRISDataUseCase --> StrategyRegistry : выбирает стратегию по TargetService
+ApplyHRISDataUseCase --> SyncStatePort : фиксирует контрольную точку
+ApplyHRISDataUseCase --> StrategyRegistry : запрашивает стратегию по TargetService
 
 StrategyRegistry "1" o-- "*" ChangeDispatchStrategy : хранит зарегистрированные стратегии
 
-' Управление циклом импорта
-HRISImportService *-- FetchHRISDataUseCase : запускает получение изменений
-HRISImportService *-- ApplyHRISDataUseCase : запускает применение изменений
+' Управление циклом импорта через интерфейсы
+HRISImportService --> FetchDataUseCase : вызывает Execute()
+HRISImportService --> ApplyDataUseCase : вызывает Execute()
+FetchDataUseCase <|.. FetchHRISDataUseCase : реализует
+ApplyDataUseCase <|.. ApplyHRISDataUseCase : реализует
 
-' Модель кадрового изменения
+' Связи с моделью кадрового изменения
 ChangeDispatchStrategy ..> ChangeRecord : обрабатывает
 HRISClientPort ..> ChangeRecord : возвращает
 ChangeRecord --> TargetService : определяет получателя изменения

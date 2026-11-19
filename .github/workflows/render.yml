@@ -40,20 +40,10 @@ jobs:
             --output "$RUNNER_TEMP/plantuml.jar"
 
       - name: Render SVG and PNG diagrams
+        env:
+          PLANTUML_JAR: ${{ runner.temp }}/plantuml.jar
         run: |
-          # Rebuild the generated folder so deleted/renamed diagrams leave no stale files.
-          rm -rf diagrams
-          mkdir -p diagrams
-          while IFS= read -r -d '' source; do
-            output="$GITHUB_WORKSPACE/diagrams/$(dirname "$source")"
-            mkdir -p "$output"
-            for format in svg png; do
-              java -Djava.awt.headless=true \
-                -jar "$RUNNER_TEMP/plantuml.jar" \
-                -charset UTF-8 -failfast2 "-t$format" \
-                -o "$output" "$source"
-            done
-          done < <(git ls-files -z -- '*.puml')
+          python3 scripts/render_diagrams.py
 
       - name: Upload diagrams
         uses: actions/upload-artifact@v4

@@ -40,20 +40,10 @@ jobs:
             --output "$RUNNER_TEMP/plantuml.jar"
 
       - name: Render SVG and PNG diagrams
+        env:
+          PLANTUML_JAR: ${{ runner.temp }}/plantuml.jar
         run: |
-          # Rebuild the generated folder so deleted/renamed diagrams leave no stale files.
-          rm -rf diagrams
-          mkdir -p diagrams
-          while IFS= read -r -d '' source; do
-            output="$GITHUB_WORKSPACE/diagrams/$(dirname "$source")"
-            mkdir -p "$output"
-            for format in svg png; do
-              java -Djava.awt.headless=true \
-                -jar "$RUNNER_TEMP/plantuml.jar" \
-                -charset UTF-8 -failfast2 "-t$format" \
-                -o "$output" "$source"
-            done
-          done < <(git ls-files -z -- '*.puml')
+          python3 scripts/render_diagrams.py
 
       - name: Upload diagrams
         uses: actions/upload-artifact@v4
@@ -65,16 +55,16 @@ jobs:
           if-no-files-found: error
 
       - name: Commit updated diagrams
-        if: github.event_name != 'pull_request' && github.ref_type == 'branch'
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         env:
           TARGET_BRANCH: ${{ github.ref_name }}
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A -- diagrams
           if git diff --cached --quiet; then
             echo 'Diagrams are already up to date.'
             exit 0
           fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m "Обновлены сгенерированные диаграммы"
           git push origin "HEAD:refs/heads/$TARGET_BRANCH"

@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   diagrams:
-    name: Check PlantUML
+    name: Render PlantUML diagrams
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -35,8 +35,22 @@ jobs:
             https://github.com/plantuml/plantuml/releases/latest/download/plantuml.jar \
             --output "$RUNNER_TEMP/plantuml.jar"
 
-      - name: Check and render diagrams
+      - name: Render SVG diagrams
         run: |
           java -Djava.awt.headless=true \
             -jar "$RUNNER_TEMP/plantuml.jar" \
             -charset UTF-8 -failfast2 -tsvg "**/*.puml"
+      - name: Render PNG diagrams
+        run: |
+          java -Djava.awt.headless=true \
+            -jar "$RUNNER_TEMP/plantuml.jar" \
+            -charset UTF-8 -failfast2 -tpng "**/*.puml"
+
+      - name: Upload diagrams
+        uses: actions/upload-artifact@v4
+        with:
+          name: plantuml-diagrams
+          path: |
+            **/*.svg
+            **/*.png
+          if-no-files-found: error

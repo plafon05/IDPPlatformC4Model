@@ -1,0 +1,247 @@
+{
+  "UML_L4/delivery_service_l4.puml": {
+    "hash": "3008617c999b245ea607eecd9d1d3bc46dba85647755c2b4db1aba73332a2858",
+    "images": [
+      "UML_L4/delivery_service.png",
+      "UML_L4/delivery_service.svg"
+    ]
+  },
+  "UML_L4/development_plan_service_l4.puml": {
+    "hash": "0f439e20881b9f929148bb7f2e67f0fb0be2e796029c35a1a424de25d72c6fd4",
+    "images": [
+      "UML_L4/Development_Plan_Service_L4.png",
+      "UML_L4/Development_Plan_Service_L4.svg"
+    ]
+  },
+  "UML_L4/hris_import_service_class_mod.puml": {
+    "hash": "ccdaa0c4ff432104342555a10f76a3a3255f7d01d5a371631ee73ec4f95093be",
+    "images": [
+      "UML_L4/HRIS_Import_Service_L4.png",
+      "UML_L4/HRIS_Import_Service_L4.svg"
+    ]
+  },
+  "UML_L4/skill_gap_engine_class_mod.puml": {
+    "hash": "00e0c31a65e7f2ba058cc3af0dc7d969491b2b38efb0c299ff0b186b54bc6c5e",
+    "images": [
+      "UML_L4/IDP_Platform_Talent_SkillGapEngine_Class.png",
+      "UML_L4/IDP_Platform_Talent_SkillGapEngine_Class.svg"
+    ]
+  },
+  "componentsL3/L3_employeeService.puml": {
+    "hash": "5bd6bc4c79da54fb3e7ae617fd2c22d2107a917c3202c5ff091f75ffd15d4bc3",
+    "images": [
+      "componentsL3/IDP_Platform_EmployeeService_L3_v6_boundary.png",
+      "componentsL3/IDP_Platform_EmployeeService_L3_v6_boundary.svg"
+    ]
+  },
+  "componentsL3/developmentPlanService.puml": {
+    "hash": "288f919158fb36fe9be6183176863a9a049971b6f0f1a331eed903d4b755c328",
+    "images": [
+      "componentsL3/IDP_Platform_DevelopmentPlanService_L3.png",
+      "componentsL3/IDP_Platform_DevelopmentPlanService_L3.svg"
+    ]
+  },
+  "componentsL3/notificationService_L3.puml": {
+    "hash": "719ea6e3b7b7d97595e5a5cc4043f92c5793c57875f7ad77a30c34a42e61391f",
+    "images": [
+      "componentsL3/IDP_Platform_Notification_Service_L3.png",
+      "componentsL3/IDP_Platform_Notification_Service_L3.svg"
+    ]
+  },
+  "componentsL3/talentService_L3_components.puml": {
+    "hash": "c49f87e8fa998c302038d4e10ae210658d81e3b890baea50bb858fe8eec65274",
+    "images": [
+      "componentsL3/IDP_Platform_L3_Talent_Components.png",
+      "componentsL3/IDP_Platform_L3_Talent_Components.svg"
+    ]
+  },
+  "conteinersL2/developmentPlanService.puml": {
+    "hash": "38b6e635aea3709ff0da7b96563cfa11ab153294ca57f196ca97ba86d2da266e",
+    "images": [
+      "conteinersL2/IDP_Platform_L2_Development.png",
+      "conteinersL2/IDP_Platform_L2_Development.svg"
+    ]
+  },
+  "conteinersL2/employeeService.puml": {
+    "hash": "025571ac5bbcb999f5e666c155950438e4fde2602ad51d21eb8a4354ae48d31c",
+    "images": [
+      "conteinersL2/IDP_Platform_L2_Employee.png",
+      "conteinersL2/IDP_Platform_L2_Employee.svg"
+    ]
+  },
+  "conteinersL2/main_L2v2.puml": {
+    "hash": "0358c05c726d694c5df85bb3adf83286eb19a01580900fb21be7d96e8a2522c5",
+    "images": [
+      "conteinersL2/IDP_Platform_L2.png",
+      "conteinersL2/IDP_Platform_L2.svg"
+    ]
+  },
+  "conteinersL2/notificationService.puml": {
+    "hash": "20f7ecc21ad6226f678a2aec0d879326b68cae1b4fc483b00e95b52128c07177",
+    "images": [
+      "conteinersL2/IDP_Platform_L2_Notification.png",
+      "conteinersL2/IDP_Platform_L2_Notification.svg"
+    ]
+  },
+  "conteinersL2/talentService.puml": {
+    "hash": "c1f04d87805737835646712de2d71d6b93bcf97431b221968251b73f63c94fd0",
+    "images": [
+      "conteinersL2/IDP_Platform_L2_Talent.png",
+      "conteinersL2/IDP_Platform_L2_Talent.svg"
+    ]
+  },
+  "conteinersL2/v1/backend-DB_L2.puml": {
+    "hash": "044df893a2c8402d8165d0f7e16a1ca91ab02f5d8e9cdb5a84fcc2f820e26ae1",
+    "images": [
+      "conteinersL2/v1/IDP_Platform_L2_Backend.png",
+      "conteinersL2/v1/IDP_Platform_L2_Backend.svg"
+    ]
+  },
+  "conteinersL2/v1/frontend-OS_L2.puml": {
+    "hash": "611d238681ee8e83d7406dc0a8051caccb2782c3eaa107cf4345f4a8c3bcb528",
+    "images": [
+      "conteinersL2/v1/IDP_Platform_L2_Web_ObjectStorage.png",
+      "conteinersL2/v1/IDP_Platform_L2_Web_ObjectStorage.svg"
+    ]
+  },
+  "conteinersL2/v1/main_L2.puml": {
+    "hash": "995357cab5880a7f8cdd75564fc54243865e0f3248903b8729c2ec45c2d1c459",
+    "images": [
+      "conteinersL2/v1/IDP_Platform_L2.png",
+      "conteinersL2/v1/IDP_Platform_L2.svg"
+    ]
+  },
+  "conteinersL2/v1/notificationServ-redis.puml": {
+    "hash": "a0fab25a41a0452f99998f9fb6d684bbc66f76658454acf7f501325454272824",
+    "images": [
+      "conteinersL2/v1/IDP_Platform_L2_Notification_Redis.png",
+      "conteinersL2/v1/IDP_Platform_L2_Notification_Redis.svg"
+    ]
+  },
+  "conteinersL2/v1/reportingServ-integrationServ.puml": {
+    "hash": "a836124e9cc8615cb720d94f7c7294d7d65300ebe401a0b4b74fe42f95ca6494",
+    "images": [
+      "conteinersL2/v1/IDP_Platform_L2_Reporting_Integration.png",
+      "conteinersL2/v1/IDP_Platform_L2_Reporting_Integration.svg"
+    ]
+  },
+  "contextL1/idpPlatform_L1.puml": {
+    "hash": "5fc2ac1b3f449fd1022ff9957b986a72180efde9b7d26c24d36f46a40063a0b8",
+    "images": [
+      "contextL1/IDP_Platform_L1.png",
+      "contextL1/IDP_Platform_L1.svg"
+    ]
+  },
+  "deployment/Deployment_Notification_L2.puml": {
+    "hash": "f2f2f121e2746ca5a3cf515eaaafea59b7e41ea52fb11ef038463d6b36c0df5b",
+    "images": [
+      "deployment/IDP_Notification_Deployment_L2.png",
+      "deployment/IDP_Notification_Deployment_L2.svg"
+    ]
+  },
+  "deployment/deployment_general.puml": {
+    "hash": "c11372f6c10f7f62587e184a8e1444bbfb7e8eba29c19f229996345cb8740902",
+    "images": [
+      "deployment/IDP_Platform_Deployment.png",
+      "deployment/IDP_Platform_Deployment.svg"
+    ]
+  },
+  "deployment/developmentPlanService_deployment.puml": {
+    "hash": "de775e38fd4838ed61b97a6950c4a69cf0e6f407b6351c6c2abe063f271e0c21",
+    "images": [
+      "deployment/Development_Plan_Service_Deployment.png",
+      "deployment/Development_Plan_Service_Deployment.svg"
+    ]
+  },
+  "deployment/employee_deployment.puml": {
+    "hash": "a4b98cd3cda9cc7b031e7b3c7336f4ded12052c1e5fd8986d84ecf42eedb14ba",
+    "images": [
+      "deployment/Employee_Service_Deployment.png",
+      "deployment/Employee_Service_Deployment.svg"
+    ]
+  },
+  "deployment/talent_deployment.puml": {
+    "hash": "689e62d1c69e5dc71ee604cfeb652479cf2bf6aae0d0d3e31539e9225e2b21b9",
+    "images": [
+      "deployment/Talent_Service_Deployment.png",
+      "deployment/Talent_Service_Deployment.svg"
+    ]
+  },
+  "dynamic/Dynamic_Notification_Delivery.puml": {
+    "hash": "84b67025ebd1025a495cf73fa352d5d5827b98498a52172ba5334a8fe4aa53f8",
+    "images": [
+      "dynamic/IDP_Notification_Dynamic_Delivery.png",
+      "dynamic/IDP_Notification_Dynamic_Delivery.svg"
+    ]
+  },
+  "dynamic/developmentPlanService_dynamic.puml": {
+    "hash": "e98529c292316d1b3c34a58fc0a8efa80891647f7c05335d28d0f3a0546d8fc8",
+    "images": [
+      "dynamic/Development_Plan_Service_Dynamic_LMS.png",
+      "dynamic/Development_Plan_Service_Dynamic_LMS.svg"
+    ]
+  },
+  "dynamic/dynamic_general_v1.puml": {
+    "hash": "8489e3f66feab7850ca72c2dc52a706bc4d00f2f08e920cc6ab144a0d34b2b4a",
+    "images": [
+      "dynamic/IDP_Platform_Dynamic_Process.png",
+      "dynamic/IDP_Platform_Dynamic_Process.svg"
+    ]
+  },
+  "dynamic/dynamic_general_v2S.puml": {
+    "hash": "bb245148fb2fd6563cfcf55b3cac2a57357659516d9c534e12748b47ff8295a5",
+    "images": [
+      "dynamic/dynamic_process.png",
+      "dynamic/dynamic_process.svg"
+    ]
+  },
+  "dynamic/employee_dynamic_step1.puml": {
+    "hash": "2a27821ce6a3aaccd8536cb59a496ff8aeff34bb0ac9183c8f3bd3790db651da",
+    "images": [
+      "dynamic/Employee_Service_Dynamic_Step1.png",
+      "dynamic/Employee_Service_Dynamic_Step1.svg"
+    ]
+  },
+  "dynamic/talent_dynamic_skill_gap_checkpoint.puml": {
+    "hash": "d5102d3cc90145569c4e19929e9e8eafe307575afe30fc207a6fd72a59aa46b2",
+    "images": [
+      "dynamic/Talent_Service_Dynamic_Skill_Gap_Checkpoint.png",
+      "dynamic/Talent_Service_Dynamic_Skill_Gap_Checkpoint.svg"
+    ]
+  },
+  "landscapeL0/L0_Notification_Landscape.puml": {
+    "hash": "93d39152c3a7a38b71d49e3f627744cc0d5037d69dc0900dc2f143cf0d466eae",
+    "images": [
+      "landscapeL0/IDP_Notification_Landscape_L0.png",
+      "landscapeL0/IDP_Notification_Landscape_L0.svg"
+    ]
+  },
+  "landscapeL0/developmentPlanService_L0.puml": {
+    "hash": "30ea79f6552ab295630649b9da72bd3a4e801e415595a1207507e26d36dbbc37",
+    "images": [
+      "landscapeL0/IDP_Platform_DevelopmentPlan_L0.png",
+      "landscapeL0/IDP_Platform_DevelopmentPlan_L0.svg"
+    ]
+  },
+  "landscapeL0/employeeService_L0.puml": {
+    "hash": "32cb4ef8560d9c2edde1df93386b20e944d1b89b4c54476f5aae60c54af80664",
+    "images": [
+      "landscapeL0/IDP_Platform_Employee_L0.png",
+      "landscapeL0/IDP_Platform_Employee_L0.svg"
+    ]
+  },
+  "landscapeL0/generalLandscape.puml": {
+    "hash": "41033a7ea4b6a9ba8396301065b0db156b5f0a286a49cc57e16ce4b880331827",
+    "images": [
+      "landscapeL0/IDP_Platform_L0.png",
+      "landscapeL0/IDP_Platform_L0.svg"
+    ]
+  },
+  "landscapeL0/talentService_L0.puml": {
+    "hash": "eeac3fa04e3a360da3587f6f228675c3b4e4ea91beb552f8071039caff60939f",
+    "images": [
+      "landscapeL0/IDP_Platform_Talent_L0.png",
+      "landscapeL0/IDP_Platform_Talent_L0.svg"
+    ]
+  }
+}

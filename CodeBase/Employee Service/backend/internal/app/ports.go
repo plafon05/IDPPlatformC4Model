@@ -27,9 +27,3 @@ type EmployeeServicePort interface {
 type OrganizationServicePort interface {
 	ProcessOrganizationUpdate(ctx context.Context, entityID string, data map[string]any) error
 }
-
-// RoleServicePort - порт к Role Management Service
-type RoleServicePort interface {
-	ProcessRoleUpdate(ctx context.Context, entityID string, data map[string]any) error
-}
-

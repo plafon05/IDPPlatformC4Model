@@ -96,7 +96,7 @@ Rel_D(planCatalogClient, developmentService, "Запрашивает досту�
 Rel_D(lmsClient, lms, "Получает курсы и результаты\nобучения", "HTTPS / REST / JSON")
 Rel_L(outboxRelay, repository, "Читает записи outbox и отмечает\nотправленные", "Go call")
 Rel_D(outboxRelay, eventStreams, "Публикует события развития и\nитоговые результаты тестов для\nзаданий ИПР", "Kafka protocol / TLS")
-developmentService -[norank]-> eventStreams : Получает итоговые результаты тестов\nдля проверки заданий ИПР\n[Kafka protocol / TLS]
+developmentService -[norank]-> eventStreams : Получает итоговые результаты тестов\nи курсов LMS для проверки заданий ИПР\n[Kafka protocol / TLS]
 
 ' ---------- Геометрия: слои сверху вниз, компоненты слева направо ----------
 presentationLayer -[hidden]down-> applicationLayer

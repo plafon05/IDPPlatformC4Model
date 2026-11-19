@@ -23,12 +23,17 @@ top to bottom direction
 ' ==================================================================
 package "internal/talent   ·   Talent Profile Service + Talent Repository  (Phase 2)" as pkgTalent #E3F2E9 {
 
-  class Service {
-    -repo : *Repository
-    --
-    +NewService(db *pgxpool.Pool) *Service
-    +SkillGap(ctx, employeeID, profileID string, version int) (*SkillGapResult, error)
-  }
+ class Service {
+  -repo : *Repository
+  -planCatalog : *PlanCatalogClient
+  --
+  +NewService(db *pgxpool.Pool, planCatalog *PlanCatalogClient) *Service
+  +SkillGap(ctx context.Context, employeeID, profileID string, version int) (*SkillGapResult, error)
+}
+
+class PlanCatalogClient {
+  +ListPlans(ctx context.Context) ([]skillgap.DevelopmentPlan, error)
+}
 
   class SkillGapResult {
     +Report : skillgap.Report
@@ -40,9 +45,10 @@ package "internal/talent   ·   Talent Profile Service + Talent Repository  (Pha
     --
     +GetProfile(ctx, profileID string, version int) (skillgap.PositionProfile, error)
     +GetLevelRecords(ctx, employeeID string) ([]skillgap.LevelRecord, error)
-    +ListPlans(ctx) ([]skillgap.DevelopmentPlan, error)
+    
   }
 
+  Service --> PlanCatalogClient : запрашивает доступные ПР
   Service *--> Repository
   Service ..> SkillGapResult : возвращает
 }
@@ -141,7 +147,7 @@ package "internal/talent/skillgap   ·   Skill Gap & Recommendation Engine  (Pha
 Service ..> Engine : вызывает Calculate и Recommend
 Repository ..> PositionProfile : собирает
 Repository ..> LevelRecord : собирает
-Repository ..> DevelopmentPlan : собирает
+PlanCatalogClient ..> DevelopmentPlan : получает из Development Plan Service
 
 note right of Engine
   <b>Правила</b>

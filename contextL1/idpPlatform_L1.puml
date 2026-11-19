@@ -31,11 +31,11 @@ Rel(hrAdmin, idpPlatform, "Администрирует платформу и а
 
 Rel(idpPlatform, iam, "Аутентифицирует пользователей", "OIDC / HTTPS")
 
-Rel(idpPlatform, hris, "Запрашивает кадровые данные", "REST / JSON / HTTPS")
+Rel(idpPlatform, hris, "Запрашивает данные о сотрудниках и оргструктуре", "HTTPS / REST / JSON")
+
+Rel(idpPlatform, lms, "Запрашивает каталог курсов и результаты обучения", "HTTPS / REST / JSON")
 
 Rel(hris, idpPlatform, "Передаёт кадровые данные", "REST / JSON / HTTPS")
-
-Rel(idpPlatform, lms, "Запрашивает данные об обучении", "REST / JSON / HTTPS")
 
 Rel(lms, idpPlatform, "Передаёт результаты обучения", "REST / JSON / HTTPS")
 

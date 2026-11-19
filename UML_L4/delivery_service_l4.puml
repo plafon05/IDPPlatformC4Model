@@ -73,9 +73,11 @@ package "Домен" {
     +Status: JobStatus
     +Attempts: int
     +LastError: string
+    +NextAttemptAt: *time.Time
     +Start(): error
     +MarkDelivered(): error
     +MarkFailed(reason: string): error
+    +ScheduleRetry(at: time.Time, reason: string): error
   }
 
   enum Channel <<enumeration>> {

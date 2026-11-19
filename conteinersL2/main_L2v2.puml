@@ -70,7 +70,7 @@ Rel(employeeService, eventStreams, "Публикует кадровые собы
 Rel(employeeService, objectStorage, "Работает с аватарами", "S3 API / HTTPS")
 
 Rel(developmentService, objectStorage, "Работает с вложениями", "S3 API / HTTPS")
-Rel(developmentService, eventStreams, "Публикует события планов и получает результаты тестов для заданий ИПР", "Kafka protocol / TLS")
+Rel(developmentService, eventStreams, "Получает кадровые события и результаты тестов и курсов LMS, публикует события выполнения планов", "Kafka protocol / TLS")
 Rel(developmentService, developmentDb, "Читает и изменяет планы, проекции и outbox", "PostgreSQL / TLS")
 
 Rel(analyticsService, analyticsDb, "Читает и сохраняет аналитические данные", "PostgreSQL / TLS")
@@ -78,7 +78,7 @@ Rel(analyticsService, objectStorage, "Работает с отчётами", "S3
 Rel(analyticsService, eventStreams, "Читает события для аналитики", "Kafka protocol / TLS")
 
 Rel(talentService, talentDb, "Читает и изменяет данные развития и outbox", "PostgreSQL / TLS")
-Rel(talentService, eventStreams, "Читает события развития и публикует результаты оценок и тестов", "Kafka protocol / TLS")
+Rel(talentService, eventStreams, "Получает события развития, публикует результаты оценок, тестов и курсов LMS", "Kafka protocol / TLS")
 Rel(talentService, lms, "Получает курсы и результаты обучения", "HTTPS / REST / JSON")
 talentService -[norank]-> developmentService : Запрашивает ПР и задания\nдля рекомендаций\n[HTTPS / REST / JSON]
 

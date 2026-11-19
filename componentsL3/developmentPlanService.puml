@@ -45,14 +45,14 @@ System_Boundary(idpPlatform, "IDP Platform") {
 
         together {
             Component(developmentApi, "Development API Controller", "Go / HTTP Handler", "Принимает запросы по библиотеке ПР, ИПР, заданиям и адаптации. Предоставляет Talent Service доступные ПР и задания для рекомендаций с учётом прав пользователя.")
-            Component(eventConsumer, "Kafka Event Consumer", "Go / Kafka Client", "Получает кадровые события, изменения компетенций и итоговые результаты тестов для заданий ИПР.")
+            Component(eventConsumer, "Kafka Event Consumer", "Go / Kafka Client", "Получает кадровые события, изменения компетенций и результаты тестов и курсов LMS для заданий ИПР.")
             Component(reminderWorker, "Reminder Worker", "Go Background Worker", "По расписанию запускает проверку сроков заданий и этапов.")
             Component(outboxWorker, "Outbox Publishing Worker", "Go Background Worker", "По расписанию запускает цикл публикации событий outbox.")
         }
 
         together {
             Component(templateAppService, "Template Service", "Go Application Service", "Ведёт личный архив и общую библиотеку ПР. Управляет публикацией, версиями и доступом к ПР, а также шаблонами адаптации.")
-            Component(planAppService, "Development Plan Service", "Go Application Service", "Создаёт ИПР с нуля или как отдельную копию выбранной версии ПР. Назначает и завершает планы, учитывает итоги тестов по критериям заданий, пересчитывает взвешенный прогресс и проверяет условия контрольных точек.")
+            Component(planAppService, "Development Plan Service", "Go Application Service", "Создаёт ИПР с нуля или как отдельную копию выбранной версии ПР. Назначает и завершает планы, проверяет результаты тестов и курсов LMS по критериям заданий, пересчитывает взвешенный прогресс и проверяет условия контрольных точек.")
             Component(assessmentAppService, "Assessment & Comment Service", "Go Application Service", "Регистрирует решения о выполнении заданий, комментарии и подтверждающие вложения.")
             Component(adaptationAppService, "Adaptation Service", "Go Application Service", "Создаёт программы адаптации новых сотрудников по шаблонам и отслеживает их прохождение.")
             Component(projectionAppService, "Development Projection Service", "Go Application Service", "Обновляет локальные проекции сотрудников, оргструктуры, ролей и компетенций по событиям других сервисов.")
@@ -80,7 +80,7 @@ System_Boundary(idpPlatform, "IDP Platform") {
 ' Входящие запросы и события
 Rel_D(gateway, developmentApi, "Передаёт запросы по ПР, ИПР,\nзаданиям и адаптации", "HTTPS / REST / JSON", $tags="from_gateway")
 Rel_D(talentService, developmentApi, "Запрашивает доступные ПР и\nзадания для рекомендаций", "HTTPS / REST / JSON", $tags="from_talentService")
-Rel_D(eventStreams, eventConsumer, "Передаёт кадровые события,\nизменения компетенций и\nитоговые результаты тестов для\nИПР", "Kafka protocol / TLS", $tags="from_eventStreams")
+Rel_D(eventStreams, eventConsumer, "Передаёт кадровые события,\nизменения компетенций и результаты\nтестов и курсов LMS", "Kafka protocol / TLS", $tags="from_eventStreams")
 
 ' Обработка запросов и событий внутри контейнера
 Rel_D(developmentApi, templateAppService, "Поиск, публикация и управление\nверсиями ПР и шаблонами\nадаптации", "Go Call", $tags="from_developmentApi")
@@ -90,7 +90,7 @@ Rel_D(developmentApi, adaptationAppService, "Операции с адаптац�
 
 Rel_D(eventConsumer, adaptationAppService, "Передаёт событие приёма\nсотрудника", "Go Call", $tags="from_eventConsumer")
 Rel_D(eventConsumer, projectionAppService, "Передаёт изменения\nсотрудников, оргструктуры,\nролей и компетенций", "Go Call", $tags="from_eventConsumer")
-Rel_D(eventConsumer, planAppService, "Передаёт итоговый результат\nтеста, связанного с заданием\nИПР", "Go Call", $tags="from_eventConsumer")
+Rel_D(eventConsumer, planAppService, "Передаёт результат теста или\nкурса LMS по заданию ИПР", "Go Call", $tags="from_eventConsumer")
 
 Rel_D(reminderWorker, reminderAppService, "Запускает цикл напоминаний", "Go Call", $tags="from_reminderWorker")
 Rel_D(outboxWorker, outboxPublishService, "Запускает цикл публикации", "Go Call", $tags="from_outboxWorker")
